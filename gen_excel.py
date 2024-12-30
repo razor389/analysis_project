@@ -1,0 +1,1081 @@
+import os
+import sys
+import json
+import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
+from datetime import datetime
+import textwrap
+import re
+
+# Define Custom Fills
+label_fill = PatternFill(start_color="00FFFF", end_color="00FFFF", fill_type="solid")  # Light blue
+data_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")   # Cornsilk
+
+# Define custom fonts
+title_font = Font(name="Times New Roman", size=14, bold=True, italic=True)
+label_font = Font(name="Times New Roman", size=10, bold=True, italic=True)
+data_tnr_font = Font(name = "Times New Roman", size=10)
+data_tnr_italic_font = Font(name='Times New Roman', size=10, italic=True)
+data_tnr_bold_font = Font(name = "Times New Roman", bold=True)
+data_arial_font = Font(name = "Arial", size=10)
+data_arial_bold_font = Font(name ="Arial", size=10, bold=True)
+data_arial_italic_font = Font(name = "Arial", size=10, italic=True)
+
+# Define a thin black border
+thin_border = Border(
+    left=Side(style='thin', color='000000'),
+    right=Side(style='thin', color='000000'),
+    top=Side(style='thin', color='000000'),
+    bottom=Side(style='thin', color='000000')
+)
+
+# Define a thick black border for the outer edges
+thick_border = Border(
+    left=Side(style='thick', color='000000'),
+    right=Side(style='thick', color='000000'),
+    top=Side(style='thick', color='000000'),
+    bottom=Side(style='thick', color='000000')
+)
+
+def apply_table_border(ws, row, start_col, end_col):
+    """
+    Applies a thin border around a group of cells in a specified row from start_col to end_col.
+
+    :param ws: The worksheet object.
+    :param row: The row number where the group is located.
+    :param start_col: The starting column number of the group.
+    :param end_col: The ending column number of the group.
+    """
+    # Define a thin black border
+    thin_side = Side(style='thin', color='000000')
+    
+    for col in range(start_col, end_col + 1):
+        cell = ws.cell(row=row, column=col)
+        existing_border = cell.border
+        
+        # Initialize new border components with existing borders
+        new_border = Border(
+            top=existing_border.top,
+            bottom=existing_border.bottom,
+            left=existing_border.left,
+            right=existing_border.right,
+            diagonal=existing_border.diagonal,
+            diagonal_direction=existing_border.diagonal_direction,
+            outline=existing_border.outline,
+            vertical=existing_border.vertical,
+            horizontal=existing_border.horizontal
+        )
+        
+        # Apply top and bottom borders to all cells in the group
+        new_border.top = thin_side
+        new_border.bottom = thin_side
+        
+        # Apply left border to the first cell and right border to the last cell
+        if col == start_col:
+            new_border.left = thin_side
+        if col == end_col:
+            new_border.right = thin_side
+        
+        # Assign the updated border back to the cell
+        cell.border = new_border
+
+def title_fill_range(ws, row_number, left_col, right_col):
+        for cc in range(left_col, right_col + 1):
+            cell = ws.cell(row_number, cc)
+            if cell.fill.patternType is None:
+                cell.fill = label_fill
+
+def format_workbook(writer):
+    """
+    removes gridlines from all worksheets.
+    """
+    for sheetname in writer.book.sheetnames:
+        ws = writer.book[sheetname]
+        # Remove gridlines
+        ws.sheet_view.showGridLines = False
+        
+def load_final_output(ticker):
+    file_path = os.path.join("output", f"{ticker}_yoy_consolidated.json")
+    if not os.path.exists(file_path):
+        print(f"Error: {file_path} does not exist. Please generate {ticker}_yoy_consolidated.json first.")
+        sys.exit(1)
+    with open(file_path, "r") as f:
+        data = json.load(f)
+    return data
+
+def create_or_append_xls(xls_filename):
+    file_exists = os.path.exists(xls_filename)
+    if file_exists:
+        # Append mode with overlay if sheet exists
+        writer = pd.ExcelWriter(xls_filename, engine='openpyxl', mode='a', if_sheet_exists='overlay')
+    else:
+        # Create a new workbook
+        writer = pd.ExcelWriter(xls_filename, engine='openpyxl', mode='w')
+    return writer, file_exists
+
+def write_summary_sheet(writer, final_output):
+    wb = writer.book
+
+    if 'Summary' not in wb.sheetnames:
+        wb.create_sheet('Summary')
+    ws = wb['Summary']
+
+    summary_data = final_output["summary"]
+    company_name = summary_data["company_name"]
+    exchange = summary_data["exchange"]
+    symbol = summary_data["symbol"]
+    description = summary_data["description"]
+
+    # Write and format the combined title in E1
+    combined_title = f"{company_name.upper()} ({exchange}) - {symbol}"
+    ws['E1'] = combined_title
+    ws['E1'].font = title_font
+
+    # Write "Company Description" in A4 with label formatting
+    ws['A4'] = "Company Description"
+    ws['A4'].font = label_font
+
+    # Wrap and write the description
+    wrapped_lines = textwrap.wrap(description, width=150)
+    start_row = 5
+    col = 2  # Column B
+    for i, line in enumerate(wrapped_lines):
+        cell = ws.cell(row=start_row + i, column=col, value=line)
+        # Optionally, you can set font here if needed
+
+def write_company_description(writer, final_output):
+    cd_info = final_output["company_description"]
+    cd_data = cd_info["data"]
+    wb = writer.book
+
+    if "Co. Desc" not in wb.sheetnames:
+        wb.create_sheet("Co. Desc")
+    ws = wb["Co. Desc"]
+
+    # Write and format labels
+    ws.cell(row=1, column=5, value="FY End").fill = label_fill
+    ws.cell(row=1, column=5).font = label_font
+
+    ws.cell(row=1, column=8, value="Stock Price").fill = label_fill
+    ws.cell(row=1, column=8).font = label_font
+
+    ws.cell(row=1, column=11, value="Market Cap").fill = label_fill
+    ws.cell(row=1, column=11).font = label_font
+
+    # Write and format data cells
+    fiscal_year_end = cd_info.get("fiscal_year_end")
+    fy_cell = ws.cell(row=2, column=5, value=fiscal_year_end)
+    fy_cell.fill = data_fill
+    fy_cell.font = label_font
+
+    stock_price = to_float(cd_info.get("stock_price"))
+    sp_cell = ws.cell(row=2, column=8, value=stock_price)
+    sp_cell.fill = data_fill
+    sp_cell.font = label_font
+    # Apply number format
+    sp_cell.number_format = '$#,##0.00'
+
+    market_cap = to_float(cd_info.get("marketCapitalization"))
+    mc_cell = ws.cell(row=2, column=11, value=market_cap)
+    mc_cell.fill = data_fill
+    mc_cell.font = label_font
+    # Apply number format
+    mc_cell.number_format = '$#,##0'
+
+    # Sort years for consistent column ordering
+    sorted_years = sorted(cd_data.keys(), key=lambda x: int(x))  # assume years like '2022', '2023'
+
+    # Determine the next two years
+    if sorted_years:
+        max_year = max(int(year) for year in sorted_years)
+        new_years = [str(max_year + 1), str(max_year + 2)]
+    else:
+        # If sorted_years is empty, define default years
+        new_years = ["2024", "2025"]
+
+    # Append the new years to the sorted_years list
+    all_years = sorted_years + new_years
+
+    # Write the years at row=3 starting at column B
+    start_col = 2  # Column B
+    for i, year in enumerate(all_years):
+        year_cell = ws.cell(row=3, column=start_col + i, value=year)
+        year_cell.fill = label_fill
+        year_cell.font = label_font
+
+    # Define the metrics and their corresponding row positions
+    metric_positions = {
+        "net_profit": 4,            # row 4
+        "diluted_eps": 5,           # row 5
+        "operating_eps": 6,         # row 6
+        "pe_ratio": 8,              # row 8
+        "price_low": 9,             # row 9
+        "price_high": 10,           # row 10
+        "dividends_paid": 12,       # row 12
+        "dividends_per_share": 13,  # row 13
+        "avg_dividend_yield": 14,   # row 14
+        "shares_outstanding": 16,   # row 16
+        "buyback": 17,              # row 17
+        "share_equity": 19,         # row 19
+        "book_value_per_share": 20, # row 20
+        "long_term_debt": 22,       # row 22
+        "roe": 24,                  # row 24
+        "roc": 25                   # row 25
+    }
+
+    # Define human-readable labels for each metric
+    metric_labels = {
+        "net_profit": "Net Profit",
+        "diluted_eps": "Diluted EPS",
+        "operating_eps": "Operating EPS",
+        "pe_ratio": "P/E Ratio",
+        "price_low": "Yrly Price Low",
+        "price_high": "Yrly Price High",
+        "dividends_paid": "Dividends Paid",
+        "dividends_per_share": "Dividends/Share",
+        "avg_dividend_yield": "Avg Div Yield",
+        "shares_outstanding": "Shares Outstanding",
+        "buyback": "Buyback",
+        "share_equity": "Share Equity",
+        "book_value_per_share": "Book Value/Share",
+        "long_term_debt": "Long-Term Debt",
+        "roe": "ROE",
+        "roc": "ROC"
+    }
+
+    # Write metric labels in column A with label formatting
+    for metric, metric_row in metric_positions.items():
+        label_cell = ws.cell(row=metric_row, column=1, value=metric_labels[metric])  # Column A
+        label_cell.fill = label_fill
+        label_cell.font = label_font
+
+    # For each metric, write the data for each year in the specified rows
+    for metric, metric_row in metric_positions.items():
+        for i, year in enumerate(all_years):
+            value = cd_data.get(year, {}).get(metric)
+            data_cell = ws.cell(row=metric_row, column=start_col + i, value=value)
+            data_cell.fill = data_fill
+            # Apply the additional font if it's one of the new columns
+            if year in new_years:
+                data_cell.font = data_tnr_italic_font
+            else:
+                data_cell.font = data_tnr_font
+            # Apply number format
+            if isinstance(value, (int, float)):
+                data_cell.number_format = '#,##0'
+
+def write_analyses_sheet(writer, final_output):
+    analyses = final_output["analyses"]
+    inv_char = analyses["investment_characteristics"]
+    data = analyses["data"]
+    wb = writer.book
+
+    if "Analyses" not in wb.sheetnames:
+        wb.create_sheet("Analyses")
+    ws = wb["Analyses"]
+
+    # Write and format the "Investment Characteristics" title
+    ic_cell = ws.cell(row=1, column=6, value="Investment Characteristics")
+    ic_cell.fill = label_fill
+    ic_cell.font = title_font
+    title_fill_range(ws, 1, 5, 9)
+
+    # Extract required fields and write labels with formatting
+    labels_with_positions = [
+        (3, 3, "Earnings Analysis:"),
+        (5, 4, "Growth Rate %:"),
+        (7, 4, "Quality %:"),
+        (3, 8, "Use Of Earnings Analysis:"),
+        (5, 9, "Avg Div Payout Rate:"),
+        (7, 9, "Avg Stk Buyback Rate:"),
+        (13, 3, "Sales Analysis:"),
+        (15, 4, "Growth Rate %:"),
+        (17, 4, "Growth Rate PS %:"),
+        (13, 8, "Sales Analysis (last 5 yrs.):"),
+        (15, 9, "Growth Rate %:"),
+        (17, 9, "Growth Rate PS %:")
+    ]
+
+    for row, col, text in labels_with_positions:
+        cell = ws.cell(row=row, column=col, value=text)
+        cell.fill = label_fill
+        cell.font = label_font
+        title_fill_range(ws, row, col, col+1)
+
+    # Fetch data for the investment characteristics
+    growth_rate_operating_eps = inv_char["earnings_analysis"].get("growth_rate_percent_operating_eps")
+    quality_percent = inv_char["earnings_analysis"].get("quality_percent")
+
+    avg_div_payout = inv_char["use_of_earnings_analysis"].get("avg_dividend_payout_percent")
+    avg_stk_buyback = inv_char["use_of_earnings_analysis"].get("avg_stock_buyback_percent")
+
+    growth_rate_rev = inv_char["sales_analysis"].get("growth_rate_percent_revenues")
+    growth_rate_sps = inv_char["sales_analysis"].get("growth_rate_percent_sales_per_share")
+
+    growth_rate_rev_5y = inv_char["sales_analysis_last_5_years"].get("growth_rate_percent_revenues")
+    growth_rate_sps_5y = inv_char["sales_analysis_last_5_years"].get("growth_rate_percent_sales_per_share")
+
+    # Write the investment characteristics data (data cells)
+    data_cells = {
+        (5, 6): growth_rate_operating_eps,    # F5
+        (7, 6): quality_percent,              # F7
+        (5, 11): avg_div_payout,              # K5
+        (7, 11): avg_stk_buyback,             # K7
+        (15, 6): growth_rate_rev,             # F15
+        (17, 6): growth_rate_sps,             # F17
+        (15, 11): growth_rate_rev_5y,         # K15
+        (17, 11): growth_rate_sps_5y          # K17
+    }
+
+    for (row, col), value in data_cells.items():
+        cell = ws.cell(row=row, column=col, value=value)
+        cell.fill = data_fill
+        cell.font = data_tnr_bold_font
+
+    # Handle the data by years
+    sorted_years = sorted(data.keys(), key=lambda x: int(x))
+    
+    # Determine the next two years
+    if sorted_years:
+        max_year = max(int(year) for year in sorted_years)
+        new_years = [str(max_year + 1), str(max_year + 2)]
+    else:
+        # If sorted_years is empty, define default years
+        new_years = ["2024", "2025"]
+
+    # Append the new years to the sorted_years list
+    all_years = sorted_years + new_years
+    
+    start_col = 2  # Column B
+
+    # Write years at row 9 and row 19 (year labels)
+    for i, year in enumerate(all_years):
+        y9_cell = ws.cell(row=9, column=start_col + i, value=year)
+        y9_cell.fill = label_fill
+        y9_cell.font = label_font
+
+        y19_cell = ws.cell(row=19, column=start_col + i, value=year)
+        y19_cell.fill = label_fill
+        y19_cell.font = label_font
+
+    # Define the metrics and their row positions
+    metric_rows_1 = {
+        "revenues": 10,
+        "sales_per_share": 11
+    }
+
+    metric_rows_2 = {
+        "op_margin_percent": 20,
+        "tax_rate": 21,
+        "depreciation": 22,
+        "depreciation_percent": 23
+    }
+
+    # Add labels in column A for these metrics with label formatting
+    additional_labels = {
+        10: "Revenues",
+        11: "Sales/Share",
+        20: "Operating Margin %",
+        21: "Tax Rate %",
+        22: "Depreciation",
+        23: "Depreciation %"
+    }
+
+    for row, label in additional_labels.items():
+        cell = ws.cell(row=row, column=1, value=label)
+        cell.fill = label_fill
+        cell.font = label_font
+
+    # Write first set of metrics (data cells)
+    for metric, row_num in metric_rows_1.items():
+        for i, year in enumerate(all_years):
+            val = data.get(year, {}).get(metric)
+            cell = ws.cell(row=row_num, column=start_col + i, value=val)
+            cell.fill = data_fill
+            # Apply font based on whether it's a projection year
+            if year in new_years:
+                cell.font = data_tnr_italic_font
+            else:
+                cell.font = data_tnr_font
+            # Apply number format
+            if isinstance(val, (int, float)):
+                cell.number_format = '#,##0'
+
+    # Write second set of metrics (data cells)
+    for metric, row_num in metric_rows_2.items():
+        for i, year in enumerate(all_years):
+            val = data.get(year, {}).get(metric)
+            cell = ws.cell(row=row_num, column=start_col + i, value=val)
+            cell.fill = data_fill
+            # Apply font based on whether it's a projection year
+            if year in new_years:
+                cell.font = data_tnr_italic_font
+            else:
+                cell.font = data_tnr_font
+            # Apply number format
+            if isinstance(val, (int, float)):
+                cell.number_format = '#,##0'
+
+def write_profit_desc_sheet(writer, final_output):
+    pd_info = final_output["profit_description"]
+    pchar = pd_info["profit_description_characteristics"]
+    pdata = pd_info["data"]
+    wb = writer.book
+
+    # Create or access the "Profit.Desc." sheet
+    if "Profit.Desc." not in wb.sheetnames:
+        wb.create_sheet("Profit.Desc.")
+    ws = wb["Profit.Desc."]
+
+    # Write and format the title
+    title_cell = ws.cell(row=1, column=4, value="Description & Analysis of Profitability (in mlns)")
+    title_cell.fill = label_fill
+    title_cell.font = title_font
+    title_fill_range(ws, 1, 3, 10)
+    apply_table_border(ws, 1, 3, 10)
+
+    # Define the order of metrics to display
+    metrics_order = [
+        "revenues",
+        "expenses",
+        "ebitda",
+        "amortization_depreciation",
+        "free_cash_flow",
+        "capex",
+        "operating_earnings",
+        "external_costs",
+        "earnings",
+        "earnings_percent_revenue",
+        "dividend_paid",
+        "dividend_paid_pct_fcf",
+        "share_buybacks_from_stmt_cf",
+        "net_biz_acquisition"
+    ]
+
+    # Define metric labels mapping
+    metric_labels = {
+        "revenues": "Net Revenues:",
+        "expenses": "Internal Costs:",
+        "ebitda": "EBITDA:",
+        "free_cash_flow": "Free Cash Flow:",
+        "operating_earnings": "Operating Margin:",
+        "external_costs": "External Costs:",
+        "dividend_paid": "Dividend Paid:",
+        "dividend_paid_pct_fcf": "Dividend Paid % of FCF:",
+        "share_buybacks_from_stmt_cf": "Share Buybacks (Stmt of CFs):",
+        "net_biz_acquisition": "Net Biz Acquisitions:",
+        "amortization_depreciation": "Amortization & Depreciation:",
+        "capex": "Capital Expenditures:",
+        "earnings": "Earnings:",
+        "earnings_percent_revenue": "Earnings % of Revenue:"
+    }
+
+    current_row = 5  # Starting row for metrics
+    metric_rows = {}  # To track the row number for each metric
+    breakdown_rows = {}  # To track the row numbers for each breakdown item
+
+    # Step 1: Collect all unique revenue breakdown items across all years
+    all_revenue_breakdowns = set()
+    all_external_costs_breakdowns = set()
+    for year_data in pdata.values():
+        revenues = year_data.get("revenues", {})
+        external_costs = year_data.get("external_costs", {})
+        revenue_breakdown = revenues.get("breakdown", {})
+        external_costs_breakdown = external_costs.get("breakdown", {})
+        if revenue_breakdown:
+            all_revenue_breakdowns.update(revenue_breakdown.keys())
+        if external_costs_breakdown:
+            all_external_costs_breakdowns.update(external_costs_breakdown.keys())
+
+    # Step 2: Iterate through metrics and define rows
+    for metric in metrics_order:
+        # Get the label from the mapping
+        label = metric_labels.get(metric, metric.capitalize() + ":")
+
+        # Write the metric label cell with formatting
+        label_cell = ws.cell(row=current_row, column=1, value=label)
+        label_cell.fill = label_fill
+        label_cell.font = label_font
+        # Fill columns A to C for the label
+        for col in range(1, 4):
+            cell = ws.cell(row=current_row, column=col)
+            cell.fill = label_fill
+            cell.font = label_font
+        metric_rows[metric] = current_row
+        current_row += 1
+
+        # Handle breakdowns
+        if metric == "revenues":
+            for bkey in sorted(all_revenue_breakdowns):
+                breakdown_cell = ws.cell(row=current_row, column=2, value=bkey)
+                breakdown_cell.font = Font(italic=True)
+                breakdown_rows[(metric, bkey)] = current_row
+                current_row += 1
+        elif metric == "expenses" or metric == "external_costs":
+            metric_data = pdata[next(iter(pdata))].get(metric, {})
+            if isinstance(metric_data, dict) and "breakdown" in metric_data:
+                breakdown_items = all_external_costs_breakdowns if metric == "external_costs" else metric_data["breakdown"].keys()
+                for bkey in sorted(breakdown_items):
+                    breakdown_cell = ws.cell(row=current_row, column=2, value=bkey)
+                    breakdown_cell.font = Font(italic=True)
+                    breakdown_rows[(metric, bkey)] = current_row
+                    current_row += 1
+
+    # Step 3: Write Year Headers
+    sorted_years = sorted(pdata.keys(), key=lambda x: int(x))
+    start_col_for_years = 4  # Starting at column D
+
+    for i, year in enumerate(sorted_years):
+        year_col = start_col_for_years + i * 2  # Each year takes 2 columns
+        y_cell = ws.cell(row=3, column=year_col, value=year)
+        y_cell.fill = label_fill
+        y_cell.font = label_font
+
+    # Step 4: Write Metric Values and Breakdown Values
+    for i, year in enumerate(sorted_years):
+        year_col = start_col_for_years + i * 2  # Column for the value
+        year_data = pdata[year]
+        
+        for metric in metrics_order:
+            metric_val = year_data.get(metric)
+            metric_row = metric_rows.get(metric)
+
+            if metric_val is None:
+                continue
+
+            if isinstance(metric_val, dict) and "breakdown" in metric_val:
+                # Handle metrics with breakdowns
+                total_key = None
+                if metric == "revenues":
+                    total_key = "total_revenues"
+                elif metric == "expenses":
+                    total_key = "total_expenses"
+                elif metric == "external_costs":
+                    total_key = "total_external_costs"
+
+                if total_key and total_key in metric_val:
+                    val = to_float(metric_val[total_key])
+                    cell = ws.cell(row=metric_row, column=year_col, value=val)
+                    cell.fill = data_fill
+                    cell.font = Font(name="Arial", italic=True)
+                    cell.number_format = '#,##0'
+
+                # Write breakdown items
+                for (m, bkey), brow in breakdown_rows.items():
+                    if m == metric:
+                        breakdown_val = metric_val["breakdown"].get(bkey)
+                        if breakdown_val is not None:
+                            breakdown_val = to_float(breakdown_val)
+                            bdata_cell = ws.cell(row=brow, column=year_col, value=breakdown_val)
+                            # Apply italic font
+                            bdata_cell.font = data_arial_italic_font
+                            # Apply number format
+                            bdata_cell.number_format = '#,##0'
+                            
+                            # Add CAGR for revenue breakdowns
+                            if metric == "revenues":
+                                cagr_key = f"cagr_revenues_{bkey}_percent"
+                                cagr_value = pchar.get("cagr_revenues_breakdown_percent", {}).get(cagr_key)
+                                if cagr_value is not None:
+                                    cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
+                                    cagr_cell.font = Font(name="Arial", italic=True, size=8)
+                                    cagr_cell.number_format = '0.00%'
+                            
+                            # Add CAGR for external costs breakdowns
+                            elif metric == "external_costs":
+                                cagr_key = f"cagr_external_costs_{bkey}_percent"
+                                cagr_value = pchar.get("cagr_external_costs_breakdown_percent", {}).get(cagr_key)
+                                if cagr_value is not None:
+                                    cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
+                                    cagr_cell.font = Font(name="Arial", italic=True, size=8)
+                                    cagr_cell.number_format = '0.00%'
+                        else:
+                            bdata_cell = ws.cell(row=brow, column=year_col, value=None)
+                            bdata_cell.number_format = '#,##0'
+            else:
+                # Handle metrics without breakdowns
+                val = to_float(metric_val)
+                cell = ws.cell(row=metric_row, column=year_col, value=val)
+                cell.fill = data_fill
+                cell.font = Font(name="Arial", italic=True)
+                cell.number_format = '#,##0'
+
+    # Step 5: Write CAGR Values
+    cagr_map = {
+        "revenues": "cagr_revenues_percent",
+        "expenses": "cagr_total_expenses_percent",
+        "ebitda": "cagr_ebitda_percent",
+        "free_cash_flow": "cagr_free_cash_flow_percent",
+        "operating_earnings": "cagr_operating_earnings_percent",
+        "external_costs": "cagr_total_external_costs_percent",
+        "earnings": "cagr_earnings_percent"
+    }
+
+    for metric, cagr_key in cagr_map.items():
+        cagr_value = pchar.get(cagr_key)
+        if cagr_value is not None and metric in metric_rows:
+            row = metric_rows[metric]
+            cagr_cell = ws.cell(row=row, column=3, value=cagr_value)
+            cagr_cell.font = Font(name="Arial", italic=True, size=8)
+            cagr_cell.number_format = '0.00%'
+
+    breakdown_cagr_map = {
+        "cost_of_revenue": "cagr_cost_of_revenue_percent",
+        "research_and_development": "cagr_research_and_development_percent",
+        "selling_marketing_general_admin": "cagr_selling_marketing_general_admin_percent"
+    }
+
+    for (metric, bkey), brow in breakdown_rows.items():
+        cagr_field = breakdown_cagr_map.get(bkey)
+        if cagr_field:
+            cagr_value = pchar.get(cagr_field)
+            if cagr_value is not None:
+                cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
+                cagr_cell.font = Font(name="Arial", italic=True, size=8)
+                cagr_cell.number_format = '0.00%'
+
+    # Step 6: Compute and Write Percentages
+    revenues_row = metric_rows.get("revenues")
+    expense_breakdowns = ["cost_of_revenue", "research_and_development", "selling_marketing_general_admin"]
+    top_metrics = ["ebitda", "operating_earnings", "earnings"]
+
+    for i, year in enumerate(sorted_years):
+        year_col = start_col_for_years + i * 2
+        rev_val = ws.cell(row=revenues_row, column=year_col).value
+        if rev_val is None or rev_val == 0:
+            continue
+
+        # Calculate percentages for all revenue breakdowns
+        for bkey in all_revenue_breakdowns:
+            br_key = ("revenues", bkey)
+            if br_key in breakdown_rows:
+                brow = breakdown_rows[br_key]
+                metric_val = ws.cell(row=brow, column=year_col).value
+                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
+                    percent = (metric_val / rev_val) * 100
+                    percent_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
+                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+
+        # Calculate percentages for expense breakdowns
+        for bkey in expense_breakdowns:
+            br_key = ("expenses", bkey)
+            if br_key in breakdown_rows:
+                brow = breakdown_rows[br_key]
+                metric_val = ws.cell(row=brow, column=year_col).value
+                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
+                    percent = (metric_val / rev_val) * 100
+                    percent_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
+                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+
+        # Calculate percentages for external costs breakdowns
+        for bkey in all_external_costs_breakdowns:
+            br_key = ("external_costs", bkey)
+            if br_key in breakdown_rows:
+                brow = breakdown_rows[br_key]
+                metric_val = ws.cell(row=brow, column=year_col).value
+                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
+                    percent = (metric_val / rev_val) * 100
+                    percent_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
+                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+
+        # Calculate percentages for top metrics
+        for tm in top_metrics:
+            if tm in metric_rows:
+                tm_row = metric_rows[tm]
+                metric_val = ws.cell(row=tm_row, column=year_col).value
+                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
+                    percent = (metric_val / rev_val) * 100
+                    percent_cell = ws.cell(row=tm_row, column=year_col + 1, value=f"{percent:.1f}%")
+                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+
+def write_balance_sheet_sheet(writer, final_output):
+    bs_info = final_output["balance_sheet"]
+    bs_char = bs_info["balance_sheet_characteristics"]
+    bs_data = bs_info["data"]
+    wb = writer.book
+
+    if "Balance Sht." not in wb.sheetnames:
+        wb.create_sheet("Balance Sht.")
+    ws = wb["Balance Sht."]
+
+    # Write and format the title
+    title_cell = ws.cell(row=1, column=4, value="Balance Sheet (in millions):")
+    title_cell.fill = label_fill
+    title_cell.font = title_font
+    title_fill_range(ws, 1, 4,7)
+    apply_table_border(ws, 1, 4, 7)
+
+    # Extract characteristics
+    cagr_assets = bs_char.get("cagr_total_assets_percent")
+    cagr_liabilities = bs_char.get("cagr_total_liabilities_percent")
+    cagr_equity = bs_char.get("cagr_total_shareholders_equity_percent")
+
+    top_sections = [
+        ("assets", "Assets:"),
+        ("liabilities", "Liabilities:"),
+        ("shareholders_equity", "Shareholder's Equity:")
+    ]
+
+    sorted_years = sorted(bs_data.keys(), key=lambda x: int(x))
+    start_col_for_years = 6  # Column F
+
+    # Write and format years in row 3
+    for i, year in enumerate(sorted_years):
+        year_col = start_col_for_years + i
+        y_cell = ws.cell(row=3, column=year_col, value=year)
+        y_cell.fill = label_fill
+        y_cell.font = label_font
+        y_cell.border = thin_border
+
+    current_row = 5
+    section_rows = {}
+
+    for section_key, section_label in top_sections:
+        # Main heading label in column A with label formatting
+        sec_label_cell = ws.cell(row=current_row, column=1, value=section_label)
+        sec_label_cell.fill = label_fill
+        sec_label_cell.font = label_font
+        title_fill_range(ws, current_row, 1,5)
+        apply_table_border(ws, current_row, 1, 5)
+        section_rows[section_key] = current_row
+
+        first_year = sorted_years[0]
+        section_data = bs_data[first_year].get(section_key, {})
+        total_key = "total_" + section_key
+
+        # Write total values for each year (data fill)
+        for i, year in enumerate(sorted_years):
+            year_col = start_col_for_years + i
+            val = to_float(bs_data[year][section_key].get(total_key))
+            d_cell = ws.cell(row=current_row, column=year_col, value=val)
+            # This is the main heading's data row, so data fill it
+            d_cell.fill = data_fill
+            d_cell.font = data_arial_bold_font
+            d_cell.border = thin_border
+            # Apply number format
+            if isinstance(val, (int, float)):
+                d_cell.number_format = '#,##0'
+
+        # Apply CAGR to column E
+        if section_key == "assets":
+            if cagr_assets is not None:
+                ws.cell(row=section_rows["assets"], column=5, value=cagr_assets)
+        elif section_key == "liabilities":
+            if cagr_liabilities is not None:
+                ws.cell(row=section_rows["liabilities"], column=5, value=cagr_liabilities)
+        elif section_key == "shareholders_equity":
+            if cagr_equity is not None:
+                ws.cell(row=section_rows["shareholders_equity"], column=5, value=cagr_equity)
+
+        current_row += 1
+
+        # Breakdown items (no fill, no font)
+        breakdown_data = section_data.get("breakdown", {})
+        breakdown_rows = {}
+        for bkey in breakdown_data.keys():
+            # Breakdown label no fill
+            ws.cell(row=current_row, column=2, value=bkey)
+            breakdown_rows[bkey] = current_row
+            current_row += 1
+
+        # Write breakdown data (no fill)
+        for bkey, brow in breakdown_rows.items():
+            for i, year in enumerate(sorted_years):
+                year_col = start_col_for_years + i
+                val = to_float(bs_data[year][section_key]["breakdown"].get(bkey))
+                bdata_cell = ws.cell(row=brow, column=year_col, value=val)
+                bdata_cell.font = data_arial_italic_font
+                # Apply number format
+                if isinstance(val, (int, float)):
+                    bdata_cell.number_format = '#,##0'
+
+        # Add a blank line before the next section
+        current_row += 1
+
+def write_studies_sheet(writer, final_output):
+    studies = final_output.get("studies", {})
+    analysis = studies.get("analysis_of_debt_levels", {})
+
+    tdc = analysis.get("total_debt_capital", {})
+    ltd = analysis.get("long_term_debt", {})
+    nip = analysis.get("net_income_payback", {})
+    anip = analysis.get("addback_net_inc_payback", {})
+
+    wb = writer.book
+    if "Studies" not in wb.sheetnames:
+        wb.create_sheet("Studies")
+    ws = wb["Studies"]
+
+    # Write and format the title
+    title_cell = ws.cell(row=1, column=4, value="Description & Analysis of Debt Levels (in mlns):")
+    title_cell.font = title_font
+    title_fill_range(ws, 1, 3,10)
+
+    # Summary section labels (apply label_fill and label_font)
+    summary_labels = ["Summary:", "Total Debt-Capital:", "Long Term Debt-Cap.:", "Net Income Payback:", "Addback Net Inc Payback:"]
+    summary_rows = [3, 7, 15, 23, 35]
+    for label, row in zip(summary_labels, summary_rows):
+        cell = ws.cell(row=row, column=1, value=label)
+        cell.fill = label_fill
+        cell.font = label_font
+
+    # Summary Section Texts (no font changes)
+    ws.cell(row=3, column=2, value="Debt is a four-letter word.  Debt causes the years of repayment of capital to equity shareholders to stretch").font = data_arial_font
+    ws.cell(row=4, column=2, value="out into the more distant future.  Even worse, debt can cause the best business model to become the").font = data_arial_font
+    ws.cell(row=5, column=2, value="property of bondholders in a rough economic environment.").font = data_arial_font
+
+    # Total Debt-Capital Section Texts
+    ws.cell(row=7, column=2, value="The measure of total debt to total capital is useful when book value is a good measure of a firm's worth.  This").font = data_arial_font
+    ws.cell(row=8, column=2, value="is particularly true of traditional businesses where property, plant and equipment are important.  Further, it").font = data_arial_font
+    ws.cell(row=9, column=2, value="helps to have this ratio in capital intensive businesses with cyclical earnings.").font = data_arial_font
+
+    # Total Debt-Capital Data
+    ws.cell(row=11, column=3, value="Total Debt:").font = label_font
+    ws.cell(row=11, column=4, value=tdc.get("total_debt"))
+    ws.cell(row=11, column=5, value="Here, deferred income taxes have been excluded.").font = data_arial_font
+
+    ws.cell(row=12, column=3, value="Total Capital:").font = label_font
+    ws.cell(row=12, column=4, value=tdc.get("total_capital")).font = data_arial_font
+    ws.cell(row=12, column=5, value="Here, deferred income taxes have been excluded.").font = data_arial_font
+
+    ws.cell(row=13, column=3, value="Ratio:").font = label_font
+    ws.cell(row=13, column=4, value=tdc.get("total_debt_ratio")).font = data_arial_font
+
+    # Long Term Debt-Cap. Section Texts
+    ws.cell(row=15, column=2, value="The measure of long term debt to total capital is useful when total debt is distorted by the high presence").font = data_arial_font
+    ws.cell(row=16, column=2, value="of current assets being financed by current liabilities.  Again, the measure works best within a traditional").font = data_arial_font
+    ws.cell(row=17, column=2, value="industry setting.  The ratio helps position the equity shareholders.").font = data_arial_font
+
+    # Long Term Debt-Cap. Data
+    ws.cell(row=19, column=3, value="L. T. Debt:").font = label_font
+    ws.cell(row=19, column=4, value=ltd.get("lt_debt")).font = data_arial_font
+    ws.cell(row=19, column=5, value="Here, the current liabilities have been excluded.").font = data_arial_font
+
+    ws.cell(row=20, column=3, value="L. T. Capital:").font = label_font
+    ws.cell(row=20, column=4, value=ltd.get("lt_capital")).font = data_arial_font
+    ws.cell(row=20, column=5, value="Here, the current liabilities have been excluded.").font = data_arial_font
+
+    ws.cell(row=21, column=3, value="Ratio:").font = label_font
+    ws.cell(row=21, column=4, value=ltd.get("lt_debt_ratio")).font = data_arial_font
+
+    # Net Income Payback Section Texts
+    ws.cell(row=23, column=2, value="The measure of how quickly total debt is repaid by net income is a conservative measure, as it includes").font = data_arial_font
+    ws.cell(row=24, column=2, value="debt such as current liabilities, that are financed by current assets and excludes some sources of cash, such").font = data_arial_font
+    ws.cell(row=25, column=2, value="as noncash amortization numbers.").font = data_arial_font
+
+    # Net Income Payback Data
+    ws.cell(row=27, column=3, value="Total Debt:").font = label_font
+    ws.cell(row=27, column=4, value=nip.get("total_debt")).font = data_arial_font
+
+    ws.cell(row=28, column=3, value="Net Income:").font = label_font
+    ws.cell(row=28, column=4, value=nip.get("net_income")).font = data_arial_font
+
+    ws.cell(row=29, column=3, value="Years Payback:").font = label_font
+    ws.cell(row=29, column=4, value=nip.get("years_payback_total_debt")).font = data_arial_font
+
+    ws.cell(row=31, column=3, value="L.T. Debt:").font = label_font
+    ws.cell(row=31, column=4, value=nip.get("lt_debt")).font = data_arial_font
+
+    ws.cell(row=32, column=3, value="Net Income:").font = label_font
+    ws.cell(row=32, column=4, value=nip.get("net_income")).font = data_arial_font
+
+    ws.cell(row=33, column=3, value="Years Payback:").font = label_font
+    ws.cell(row=33, column=4, value=nip.get("years_payback_lt_debt")).font = data_arial_font
+
+    # Addback Net Inc Payback Section Texts
+    ws.cell(row=35, column=2, value="The measure of how quickly debt is repaid by addback net income is a good measure, as it starts with GAAP").font = data_arial_font
+    ws.cell(row=36, column=2, value="net income and adds back expenses on an after-tax basis that are clearly discretionary, such as business").font = data_arial_font
+    ws.cell(row=37, column=2, value="acquisitions to better analyze the strength of the repayment stream.").font = data_arial_font
+
+    # Addback Net Inc Payback Data
+    ws.cell(row=39, column=3, value="L.T. Debt:").font = label_font
+    ws.cell(row=39, column=4, value=anip.get("lt_debt")).font = data_arial_font
+
+    ws.cell(row=40, column=3, value="Net Income:").font = label_font
+    ws.cell(row=40, column=4, value=anip.get("net_income")).font = data_arial_font
+
+    ws.cell(row=41, column=3, value="Addback:").font = label_font
+    ws.cell(row=41, column=4, value=anip.get("addback")).font = data_arial_font
+    ws.cell(row=41, column=5, value="Merger charges, writedowns above the line, dep. Amort below the line less capex").font = data_arial_font
+
+    ws.cell(row=42, column=3, value="Years Payback:").font = label_font
+    ws.cell(row=42, column=4, value=anip.get("years_payback")).font = data_arial_font
+
+    # Apply data fills to specified ranges
+    def data_fill_range(ws, top_row, left_col, bottom_row, right_col):
+        for rr in range(top_row, bottom_row + 1):
+            for cc in range(left_col, right_col + 1):
+                cell = ws.cell(rr, cc)
+                if cell.fill.patternType is None:
+                    cell.fill = data_fill
+
+    data_fill_range(ws, 3, 2, 5, 12)   # B3:L5
+    data_fill_range(ws, 7, 2, 9, 12)   # B7:L9
+    data_fill_range(ws, 15, 2, 17, 12) # B15:L17
+    data_fill_range(ws, 23, 2, 25, 12) # B23:L25
+    data_fill_range(ws, 35, 2, 37, 12) # B35:L37
+
+def to_float(val):
+    if val is None or val == "":
+        return None
+    val_str = str(val).replace("%", "").replace(",", "").strip()
+    if val_str == "":
+        return None
+    try:
+        return float(val_str)
+    except ValueError:
+        return None
+    
+def write_qualities_sheet(writer, final_output):
+    """
+    Create or update a sheet called 'Qualities' that displays the text from
+    final_output['qualities'] with bold formatting for specific segments.
+    Each '\n' in the text forces a new line in the sheet.
+    Within each line, we wrap at ~100 characters. Times New Roman, size 10 font.
+    """
+    wb = writer.book
+
+    # If the sheet doesn't exist yet, create it
+    if "Qualities" not in wb.sheetnames:
+        wb.create_sheet("Qualities")
+    ws = wb["Qualities"]
+
+    # Retrieve the forum summary text
+    text = final_output.get("qualities", "No forum summary available.")
+
+    # Optional: set a descriptive title in the first cell
+    ws["A1"] = "Core Analysis"
+    ws["A1"].font = Font(name="Times New Roman", size=14, bold=True)
+    ws["A1"].fill = label_fill
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws["A1"].border = thin_border
+
+    # Split the text by newlines, so each separate line starts on a new row
+    lines = text.split("\n")
+
+    start_row = 3
+    col = 1
+    current_row = start_row
+
+    bold_pattern = re.compile(r"\*\*(.*?)\*\*")
+
+    for line in lines:
+        # 1) Trim leading/trailing spaces
+        line = line.strip()
+
+        # 2) Remove a leading dash (e.g. "- " or just "-")
+        #    This regex says: if the line starts with a dash and optional spaces, remove them.
+        line = re.sub(r"^-\s*", "", line)
+
+        # If the line is now empty after removing dash and space, still move down a row
+        if not line:
+            ws.cell(row=current_row, column=col, value="")
+            current_row += 1
+            continue
+
+        # Word-wrap the line at ~100 characters while preserving bold formatting
+        segments = []
+        last_index = 0
+
+        # Find all bold segments (those surrounded by **)
+        for match in bold_pattern.finditer(line):
+            start, end = match.span()
+            if last_index < start:
+                # Add text before the bold part
+                segments.append((line[last_index:start], False))
+            # Add the bold part
+            segments.append((match.group(1), True))
+            last_index = end
+
+        # Add any text after the last bold segment
+        if last_index < len(line):
+            segments.append((line[last_index:], False))
+
+        # Now write the segments into the Excel sheet
+        for segment, is_bold in segments:
+            wrapped_lines = textwrap.wrap(segment, width=100)
+            for wrapped_segment in wrapped_lines:
+                cell = ws.cell(row=current_row, column=col, value=wrapped_segment)
+                cell.font = Font(name="Arial", size=10, bold=is_bold)
+                current_row += 1
+
+    # Optionally set column width so text fits nicely
+    ws.column_dimensions[get_column_letter(col)].width = 110
+
+    # Remove gridlines on this sheet if you prefer
+    ws.sheet_view.showGridLines = False
+
+def generate_excel_for_ticker_year(ticker: str, year: int):
+    """
+    Generate the Excel file for the given ticker and year, writing to:
+       ./output/{ticker}.{last 2 digits of year}.2.xlsx
+    
+    :param ticker: The company symbol/ticker.
+    :param year:   The 4-digit year (e.g., 2024). We'll use only the last two digits in the filename.
+    """
+    # Convert to uppercase and build the filename, e.g.: ./output/ABC.24.2.xlsx
+    ticker = ticker.upper()
+    year_2_digits = str(year)[-2:]  # last two chars of the year
+    xls_filename = os.path.join("output", f"{ticker}.{year_2_digits}.2.xlsx")
+
+    # 1. Load the JSON data
+    final_output = load_final_output(ticker)
+
+    # 2. Create or append to the Excel file
+    writer, file_exists = create_or_append_xls(xls_filename)
+
+    # 3. Write data to each sheet
+    write_summary_sheet(writer, final_output)
+    write_company_description(writer, final_output)
+    write_analyses_sheet(writer, final_output)
+    write_profit_desc_sheet(writer, final_output)
+    write_balance_sheet_sheet(writer, final_output)
+    write_studies_sheet(writer, final_output)
+    write_qualities_sheet(writer, final_output)
+
+    # 4. Apply workbook formatting (remove gridlines, etc.)
+    format_workbook(writer)
+
+    # 5. Save
+    writer.close()
+    print(f"Data for {ticker} written to {xls_filename} successfully.")
+
+
+if __name__ == "__main__":
+    # Usage: python write_excel.py TICKER target_file.xls
+    if len(sys.argv) < 3:
+        print("Usage: python write_excel.py TICKER XLS_FILENAME")
+        sys.exit(1)
+
+    ticker = sys.argv[1].upper()
+    xls_filename = sys.argv[2]
+
+    final_output = load_final_output(ticker)
+
+    # Create or append to xls file
+    writer, file_exists = create_or_append_xls(xls_filename)
+
+    # If file doesn't exist, we might need to create the sheets first.
+    # If the file exists and has sheets, we skip this step because they should already exist.
+    if not file_exists:
+        # Create empty sheets if needed, because pandas to_excel() won't create empty sheets if no data
+        # However, since we are writing dataframes, they will create sheets automatically.
+        pass
+
+    # Now write data to each sheet
+    write_summary_sheet(writer, final_output)
+    write_company_description(writer, final_output)
+    write_analyses_sheet(writer, final_output)
+    write_profit_desc_sheet(writer, final_output)
+    write_balance_sheet_sheet(writer, final_output)
+    write_studies_sheet(writer, final_output)
+    write_qualities_sheet(writer, final_output)
+
+    # Apply formatting: set font to Arial size 10 for non-formatted cells and remove gridlines
+    format_workbook(writer)
+
+    # Save changes
+    writer.close()
+    print(f"Data for {ticker} written to {xls_filename} successfully.")

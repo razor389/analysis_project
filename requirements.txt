@@ -1,0 +1,7 @@
+finnhub-python
+yfinance
+pandas
+openpyxl
+python-dotenv
+requests
+openai
