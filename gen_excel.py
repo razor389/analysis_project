@@ -605,6 +605,8 @@ def write_profit_desc_sheet(writer, final_output):
         "earnings_percent_revenue": "Earnings % of Revenue:"
     }
 
+    percent_metrics = ["dividend_paid_pct_fcf", "earnings_percent_revenue"]
+
     current_row = 5  # Starting row for metrics
     metric_rows = {}  # To track the row number for each metric
     breakdown_rows = {}  # To track the row numbers for each breakdown item
@@ -637,6 +639,7 @@ def write_profit_desc_sheet(writer, final_output):
             cell.fill = label_fill
             cell.font = label_font
         metric_rows[metric] = current_row
+        apply_table_border(ws, current_row, 1, 3)
         current_row += 1
 
         # Handle breakdowns
@@ -665,6 +668,7 @@ def write_profit_desc_sheet(writer, final_output):
         y_cell = ws.cell(row=3, column=year_col, value=year)
         y_cell.fill = label_fill
         y_cell.font = label_font
+        y_cell.border = thin_border
 
     # Step 4: Write Metric Values and Breakdown Values
     for i, year in enumerate(sorted_years):
@@ -690,10 +694,13 @@ def write_profit_desc_sheet(writer, final_output):
 
                 if total_key and total_key in metric_val:
                     val = to_float(metric_val[total_key])
+                    if val is not None:
+                        val = val / 1_000_000
                     cell = ws.cell(row=metric_row, column=year_col, value=val)
                     cell.fill = data_fill
                     cell.font = Font(name="Arial", italic=True)
                     cell.number_format = '#,##0'
+                    cell.border = thin_border
 
                 # Write breakdown items
                 for (m, bkey), brow in breakdown_rows.items():
@@ -701,6 +708,8 @@ def write_profit_desc_sheet(writer, final_output):
                         breakdown_val = metric_val["breakdown"].get(bkey)
                         if breakdown_val is not None:
                             breakdown_val = to_float(breakdown_val)
+                            if breakdown_val is not None:
+                                breakdown_val = breakdown_val / 1_000_000
                             bdata_cell = ws.cell(row=brow, column=year_col, value=breakdown_val)
                             # Apply italic font
                             bdata_cell.font = data_arial_italic_font
@@ -714,7 +723,7 @@ def write_profit_desc_sheet(writer, final_output):
                                 if cagr_value is not None:
                                     cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
                                     cagr_cell.font = Font(name="Arial", italic=True, size=8)
-                                    cagr_cell.number_format = '0.00%'
+                                    cagr_cell.number_format = '0.0%'
                             
                             # Add CAGR for external costs breakdowns
                             elif metric == "external_costs":
@@ -723,17 +732,23 @@ def write_profit_desc_sheet(writer, final_output):
                                 if cagr_value is not None:
                                     cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
                                     cagr_cell.font = Font(name="Arial", italic=True, size=8)
-                                    cagr_cell.number_format = '0.00%'
+                                    cagr_cell.number_format = '0.0%'
                         else:
                             bdata_cell = ws.cell(row=brow, column=year_col, value=None)
                             bdata_cell.number_format = '#,##0'
             else:
                 # Handle metrics without breakdowns
                 val = to_float(metric_val)
+                if val is not None and metric not in percent_metrics:
+                    val = val / 1_000_000
                 cell = ws.cell(row=metric_row, column=year_col, value=val)
                 cell.fill = data_fill
                 cell.font = Font(name="Arial", italic=True)
-                cell.number_format = '#,##0'
+                cell.border = thin_border
+                if metric not in percent_metrics:
+                    cell.number_format = '#,##0'
+                else:
+                    cell.number_format = '0.0%'
 
     # Step 5: Write CAGR Values
     cagr_map = {

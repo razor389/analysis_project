@@ -339,7 +339,7 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict):
 
         earnings_pct_revenue = (earnings / revenues) if (earnings and revenues) else None
 
-        dividends_paid_pct_fcf = (dividends_paid / fcf) * 100 if (dividends_paid and fcf) else None
+        dividends_paid_pct_fcf = (dividends_paid / fcf) if (dividends_paid and fcf) else None
 
         # Tax rate = provision_for_taxes / pretax_income
         tax_rate = (provision_for_taxes / pretax_income) if (provision_for_taxes and pretax_income) else None
