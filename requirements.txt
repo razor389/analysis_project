@@ -1,4 +1,3 @@
-finnhub-python
 yfinance
 pandas
 openpyxl

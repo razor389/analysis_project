@@ -998,7 +998,7 @@ def transform_final_output(final_output: dict, stock_price: float = None):
             "exchange": final_output.get("exchange"),
             "description": final_output.get("description"),
             "sector": final_output.get("sector"),
-            "subsector": final_output.get("subsector")
+            "industry": final_output.get("industry")
         },
         "company_description": {
             "fiscal_year_end": fiscal_year_end,
@@ -1049,11 +1049,11 @@ def format_number(value, key=None):
         return value
 
     # Handle percentage fields
-    if key and is_percentage_field(key):
-        # Treat value as a ratio: multiply by 100 to get percentage
-        # Example: 0.2742 => 27.42%
-        percentage_val = value * 100
-        return f"{percentage_val:.2f}%"
+    # if key and is_percentage_field(key):
+    #     # Treat value as a ratio: multiply by 100 to get percentage
+    #     # Example: 0.2742 => 27.42%
+    #     percentage_val = value * 100
+    #     return f"{percentage_val:.2f}%"
 
     # Handle large numbers > 100000
     if abs(value) > 100000:
@@ -1098,11 +1098,12 @@ def finalize_output(rearranged_output):
 if __name__ == "__main__":
     # Command line arguments: symbol start_year end_year
     if len(sys.argv) < 3:
-        print("Usage: python fmp_analysis.py SYMBOL START_YEAR")
+        print("Usage: python fmp_analysis.py SYMBOL START_YEAR [--ignore_qualities]")
         sys.exit(1)
 
     symbol = sys.argv[1].upper()
     start_year = int(sys.argv[2])
+    ignore_qualities = "--ignore_qualities" in sys.argv
 
     if not FMP_API_KEY:
         print("ERROR: FMP_API_KEY not found in environment. Please set FMP_API_KEY in .env")
@@ -1161,41 +1162,44 @@ if __name__ == "__main__":
         "description": profile.get("description"),
         "marketCapitalization": profile.get("mktCap"),
         "sector": profile.get("sector"),
-        "subsector": profile.get("industry"),
+        "industry": profile.get("industry"),
         "investment_characteristics": investment_characteristics,
         "balance_sheet_characteristics": balance_sheet_characteristics,
         "profit_description_characteristics": profit_description_characteristics,
-        "data": yoy_data
+        "data": yoy_data,
+        "qualities": ""
     }
-    fetch_all_for_ticker(symbol)
-    posts_filename = os.path.join("output", f"{symbol}_posts.json")
 
-    try:
-        if os.path.exists(posts_filename):
-            # Load the posts
-            with open(posts_filename, "r", encoding="utf-8") as f:
-                posts = json.load(f)
+    if not ignore_qualities:
+        fetch_all_for_ticker(symbol)
+        posts_filename = os.path.join("output", f"{symbol}_posts.json")
 
-            # Call your existing generate_post_summary() function
-            print(f"attempting to generate post summaries for {symbol}")
-            forum_summary = generate_post_summary(posts, symbol)
+        try:
+            if os.path.exists(posts_filename):
+                # Load the posts
+                with open(posts_filename, "r", encoding="utf-8") as f:
+                    posts = json.load(f)
 
-            # Store the summary text in final_output
-            final_output["qualities"] = forum_summary
+                # Call your existing generate_post_summary() function
+                print(f"attempting to generate post summaries for {symbol}")
+                forum_summary = generate_post_summary(posts, symbol)
 
-        else:
-            print(f"No forum posts found at {posts_filename}. Skipping summary.")
-            final_output["qualities"] = "No forum summary available."
+                # Store the summary text in final_output
+                final_output["qualities"] = forum_summary
 
-    except Exception as e:
-        print(f"Error generating forum-post summary: {e}")
-        final_output["qualities"] = "Error generating forum summary."
+            else:
+                print(f"No forum posts found at {posts_filename}. Skipping summary.")
+                final_output["qualities"] = "No forum summary available."
+
+        except Exception as e:
+            print(f"Error generating forum-post summary: {e}")
+            final_output["qualities"] = "Error generating forum summary."
 
     # Get current stock price from quote-short API
     current_stock_price = get_quote_short(symbol)
 
     rearranged_output = transform_final_output(final_output, stock_price=current_stock_price)
-    rearranged_output = finalize_output(rearranged_output)  # apply normalization
+    # rearranged_output = finalize_output(rearranged_output)  # apply normalization
 
     # Save the consolidated YOY data with header
     output_path = os.path.join("output", f"{symbol}_yoy_consolidated.json")

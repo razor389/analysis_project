@@ -169,6 +169,7 @@ def write_company_description(writer, final_output):
     fy_cell = ws.cell(row=2, column=5, value=fiscal_year_end)
     fy_cell.fill = data_fill
     fy_cell.font = label_font
+    fy_cell.border = thin_border
 
     stock_price = to_float(cd_info.get("stock_price"))
     sp_cell = ws.cell(row=2, column=8, value=stock_price)
@@ -176,13 +177,15 @@ def write_company_description(writer, final_output):
     sp_cell.font = label_font
     # Apply number format
     sp_cell.number_format = '$#,##0.00'
+    sp_cell.border = thin_border
 
-    market_cap = to_float(cd_info.get("marketCapitalization"))
+    market_cap = to_float(cd_info.get("marketCapitalization")) / 1_000_000
     mc_cell = ws.cell(row=2, column=11, value=market_cap)
     mc_cell.fill = data_fill
     mc_cell.font = label_font
     # Apply number format
     mc_cell.number_format = '$#,##0'
+    mc_cell.border = thin_border
 
     # Sort years for consistent column ordering
     sorted_years = sorted(cd_data.keys(), key=lambda x: int(x))  # assume years like '2022', '2023'
@@ -204,6 +207,7 @@ def write_company_description(writer, final_output):
         year_cell = ws.cell(row=3, column=start_col + i, value=year)
         year_cell.fill = label_fill
         year_cell.font = label_font
+        year_cell.border = thin_border
 
     # Define the metrics and their corresponding row positions
     metric_positions = {
@@ -245,26 +249,109 @@ def write_company_description(writer, final_output):
         "roc": "ROC"
     }
 
+    # Define the formatting rules for each metric
+    number_formats = {
+        "net_profit": '#,##0',  # Millions with commas
+        "diluted_eps": '$#,##0.00',  # Dollars and cents
+        "operating_eps": '$#,##0.00',  # Dollars and cents
+        "pe_ratio": '#,##0.0',  # One decimal place
+        "price_low": '#,##0.0',  # One decimal place
+        "price_high": '#,##0.0',  # One decimal place
+        "dividends_paid": '#,##0',  # Millions with commas
+        "dividends_per_share": '$#,##0.00',  # Dollars and cents
+        "avg_dividend_yield": '0.00%',  # Percentage with two decimal places
+        "shares_outstanding": '#,##0',  # Millions with commas
+        "buyback": '#,##0',  # Millions with commas
+        "share_equity": '#,##0',  # Millions with commas
+        "book_value_per_share": '$#,##0.00',  # Dollars and cents
+        "long_term_debt": '#,##0',  # Millions with commas
+        "roe": '0.0%',  # Percentage with one decimal place
+        "roc": '0.0%'  # Percentage with one decimal place
+    }
+
     # Write metric labels in column A with label formatting
     for metric, metric_row in metric_positions.items():
         label_cell = ws.cell(row=metric_row, column=1, value=metric_labels[metric])  # Column A
         label_cell.fill = label_fill
         label_cell.font = label_font
+        label_cell.border = thin_border
+
+    # Define metrics that should be displayed in millions
+    million_scale_metrics = {
+        "net_profit",
+        "dividends_paid", 
+        "shares_outstanding",
+        "buyback",
+        "share_equity",
+        "long_term_debt"
+    }
 
     # For each metric, write the data for each year in the specified rows
     for metric, metric_row in metric_positions.items():
         for i, year in enumerate(all_years):
-            value = cd_data.get(year, {}).get(metric)
-            data_cell = ws.cell(row=metric_row, column=start_col + i, value=value)
-            data_cell.fill = data_fill
-            # Apply the additional font if it's one of the new columns
+            col = start_col + i
+            col_letter = get_column_letter(col)
             if year in new_years:
+                # For new years, we'll add formulas for certain metrics
+                if metric == "diluted_eps":
+                    # net profit / shares outstanding
+                    formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['shares_outstanding']}"
+                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
+                
+                elif metric == "operating_eps":
+                    # = diluted eps
+                    formula = f"={col_letter}{metric_positions['diluted_eps']}"
+                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
+                
+                elif metric == "pe_ratio":
+                    # avg yearly price (low+high)/2 / eps
+                    formula = f"=(({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2)/{col_letter}{metric_positions['diluted_eps']}"
+                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
+                
+                elif metric == "dividends_per_share":
+                    # dividends paid / shares outstanding
+                    formula = f"={col_letter}{metric_positions['dividends_paid']}/{col_letter}{metric_positions['shares_outstanding']}"
+                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
+                
+                elif metric == "buyback":
+                    # (shares outstanding last year - shares outstanding this year) * avg price
+                    prev_col = get_column_letter(col-1)
+                    formula = f"=({prev_col}{metric_positions['shares_outstanding']}-{col_letter}{metric_positions['shares_outstanding']})*({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2"
+                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
+
+                elif metric == "avg_dividend_yield":
+                    # dividends per share / average yearly price
+                    formula = f"={col_letter}{metric_positions['dividends_per_share']}/((({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2))"
+                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
+                    
+                elif metric == "book_value_per_share":
+                    # share equity / shares outstanding
+                    formula = f"={col_letter}{metric_positions['share_equity']}/{col_letter}{metric_positions['shares_outstanding']}"
+                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
+                
+                elif metric == "roe":
+                    # net profit / share equity
+                    formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['share_equity']}"
+                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
+                
+                elif metric == "roc":
+                    # net profit / (share equity + long term debt)
+                    formula = f"={col_letter}{metric_positions['net_profit']}/({col_letter}{metric_positions['share_equity']}+{col_letter}{metric_positions['long_term_debt']})"
+                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
+                
+                data_cell.fill = data_fill
                 data_cell.font = data_tnr_italic_font
-            else:
+            else: 
+                value = cd_data.get(year, {}).get(metric)
+                # Convert to millions for specific metrics
+                if value is not None and metric in million_scale_metrics:
+                    value = value / 1_000_000
+                data_cell = ws.cell(row=metric_row, column=start_col + i, value=value)
+                data_cell.fill = data_fill
+                # Apply the additional font if it's one of the new columns
                 data_cell.font = data_tnr_font
-            # Apply number format
-            if isinstance(value, (int, float)):
-                data_cell.number_format = '#,##0'
+                data_cell.border = thin_border
+            data_cell.number_format = number_formats[metric]
 
 def write_analyses_sheet(writer, final_output):
     analyses = final_output["analyses"]
