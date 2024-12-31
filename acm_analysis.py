@@ -305,7 +305,7 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict):
         revenues = ic.get('revenue')
         diluted_eps = ic.get('epsdiluted')
         ebit = ic.get('operatingIncome')
-        dividends_paid = -1 * cf.get('dividendsPaid')
+        dividends_paid = -1 * cf.get('dividendsPaid', 0)
         shareholder_equity = bs.get('totalStockholdersEquity')
         long_term_debt = bs.get('longTermDebt')
         provision_for_taxes = ic.get('incomeTaxExpense')
@@ -327,8 +327,10 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict):
         operating_eps = (net_profit / shares_outstanding) if (net_profit and shares_outstanding) else None
 
         # Operating earnings = revenues - expenses
-        operating_earnings = revenues - expenses if (expenses and revenues) else None
-        operating_earnings_pct = (operating_earnings / revenues) if revenues != 0 else None
+        operating_earnings = (revenues - expenses) if (expenses is not None and revenues is not None) else None
+
+        # Operating earnings percentage = operating earnings / revenues
+        operating_earnings_pct = (operating_earnings / revenues) if (operating_earnings is not None and revenues) else None
 
         income_tax_expense = ic.get('incomeTaxExpense')
         interest_and_other_income_expense = ic.get('totalOtherIncomeExpensesNet')
