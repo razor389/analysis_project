@@ -897,6 +897,8 @@ def write_balance_sheet_sheet(writer, final_output):
         for i, year in enumerate(sorted_years):
             year_col = start_col_for_years + i
             val = to_float(bs_data[year][section_key].get(total_key))
+            if val is not None:
+                val = val / 1_000_000
             d_cell = ws.cell(row=current_row, column=year_col, value=val)
             # This is the main heading's data row, so data fill it
             d_cell.fill = data_fill
@@ -909,13 +911,13 @@ def write_balance_sheet_sheet(writer, final_output):
         # Apply CAGR to column E
         if section_key == "assets":
             if cagr_assets is not None:
-                ws.cell(row=section_rows["assets"], column=5, value=cagr_assets)
+                ws.cell(row=section_rows["assets"], column=5, value=cagr_assets).number_format = '0.0%'
         elif section_key == "liabilities":
             if cagr_liabilities is not None:
-                ws.cell(row=section_rows["liabilities"], column=5, value=cagr_liabilities)
+                ws.cell(row=section_rows["liabilities"], column=5, value=cagr_liabilities).number_format = '0.0%'
         elif section_key == "shareholders_equity":
             if cagr_equity is not None:
-                ws.cell(row=section_rows["shareholders_equity"], column=5, value=cagr_equity)
+                ws.cell(row=section_rows["shareholders_equity"], column=5, value=cagr_equity).number_format = '0.0%'
 
         current_row += 1
 
@@ -933,6 +935,8 @@ def write_balance_sheet_sheet(writer, final_output):
             for i, year in enumerate(sorted_years):
                 year_col = start_col_for_years + i
                 val = to_float(bs_data[year][section_key]["breakdown"].get(bkey))
+                if val is not None:
+                    val = val / 1_000_000
                 bdata_cell = ws.cell(row=brow, column=year_col, value=val)
                 bdata_cell.font = data_arial_italic_font
                 # Apply number format
@@ -959,6 +963,7 @@ def write_studies_sheet(writer, final_output):
     # Write and format the title
     title_cell = ws.cell(row=1, column=4, value="Description & Analysis of Debt Levels (in mlns):")
     title_cell.font = title_font
+    apply_table_border(ws, 1 ,3, 10)
     title_fill_range(ws, 1, 3,10)
 
     # Summary section labels (apply label_fill and label_font)
@@ -968,6 +973,7 @@ def write_studies_sheet(writer, final_output):
         cell = ws.cell(row=row, column=1, value=label)
         cell.fill = label_fill
         cell.font = label_font
+        cell.border = thin_border
 
     # Summary Section Texts (no font changes)
     ws.cell(row=3, column=2, value="Debt is a four-letter word.  Debt causes the years of repayment of capital to equity shareholders to stretch").font = data_arial_font
@@ -981,15 +987,27 @@ def write_studies_sheet(writer, final_output):
 
     # Total Debt-Capital Data
     ws.cell(row=11, column=3, value="Total Debt:").font = label_font
-    ws.cell(row=11, column=4, value=tdc.get("total_debt"))
+    val = tdc.get("total_debt")
+    if val is not None:
+        val = val / 1_000_000
+    data_cell = ws.cell(row=11, column=4, value=val)
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
     ws.cell(row=11, column=5, value="Here, deferred income taxes have been excluded.").font = data_arial_font
 
     ws.cell(row=12, column=3, value="Total Capital:").font = label_font
-    ws.cell(row=12, column=4, value=tdc.get("total_capital")).font = data_arial_font
+    val = tdc.get("total_capital")
+    if val is not None:
+        val = val / 1_000_000
+    data_cell = ws.cell(row=12, column=4, value=val)
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
     ws.cell(row=12, column=5, value="Here, deferred income taxes have been excluded.").font = data_arial_font
 
     ws.cell(row=13, column=3, value="Ratio:").font = label_font
-    ws.cell(row=13, column=4, value=tdc.get("total_debt_ratio")).font = data_arial_font
+    data_cell = ws.cell(row=13, column=4, value=tdc.get("total_debt_ratio"))
+    data_cell.number_format = '0.0%'
+    data_cell.font = data_arial_font
 
     # Long Term Debt-Cap. Section Texts
     ws.cell(row=15, column=2, value="The measure of long term debt to total capital is useful when total debt is distorted by the high presence").font = data_arial_font
@@ -998,15 +1016,27 @@ def write_studies_sheet(writer, final_output):
 
     # Long Term Debt-Cap. Data
     ws.cell(row=19, column=3, value="L. T. Debt:").font = label_font
-    ws.cell(row=19, column=4, value=ltd.get("lt_debt")).font = data_arial_font
+    val = ltd.get("lt_debt")
+    if val is not None:
+        val = val / 1_000_000
+    data_cell = ws.cell(row=19, column=4, value=val)
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
     ws.cell(row=19, column=5, value="Here, the current liabilities have been excluded.").font = data_arial_font
 
     ws.cell(row=20, column=3, value="L. T. Capital:").font = label_font
-    ws.cell(row=20, column=4, value=ltd.get("lt_capital")).font = data_arial_font
+    val = ltd.get("lt_capital")
+    if val is not None:
+        val = val / 1_000_000
+    data_cell = ws.cell(row=20, column=4, value=val)
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
     ws.cell(row=20, column=5, value="Here, the current liabilities have been excluded.").font = data_arial_font
 
     ws.cell(row=21, column=3, value="Ratio:").font = label_font
-    ws.cell(row=21, column=4, value=ltd.get("lt_debt_ratio")).font = data_arial_font
+    data_cell = ws.cell(row=21, column=4, value=ltd.get("lt_debt_ratio"))
+    data_cell.number_format = '0.0%'
+    data_cell.font = data_arial_font
 
     # Net Income Payback Section Texts
     ws.cell(row=23, column=2, value="The measure of how quickly total debt is repaid by net income is a conservative measure, as it includes").font = data_arial_font
@@ -1015,22 +1045,46 @@ def write_studies_sheet(writer, final_output):
 
     # Net Income Payback Data
     ws.cell(row=27, column=3, value="Total Debt:").font = label_font
-    ws.cell(row=27, column=4, value=nip.get("total_debt")).font = data_arial_font
+    val = nip.get("total_debt")
+    if val is not None:
+        val = val / 1_000_000
+    data_cell = ws.cell(row=27, column=4, value=val)
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
 
     ws.cell(row=28, column=3, value="Net Income:").font = label_font
-    ws.cell(row=28, column=4, value=nip.get("net_income")).font = data_arial_font
+    val = nip.get("net_income")
+    if val is not None:
+        val = val / 1_000_000
+    data_cell = ws.cell(row=28, column=4, value=val)
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
 
     ws.cell(row=29, column=3, value="Years Payback:").font = label_font
-    ws.cell(row=29, column=4, value=nip.get("years_payback_total_debt")).font = data_arial_font
+    data_cell = ws.cell(row=29, column=4, value=nip.get("years_payback_total_debt"))
+    data_cell.number_format = '#,##0.0'
+    data_cell.font = data_arial_font
 
     ws.cell(row=31, column=3, value="L.T. Debt:").font = label_font
-    ws.cell(row=31, column=4, value=nip.get("lt_debt")).font = data_arial_font
+    val = nip.get("lt_debt")
+    if val is not None:
+        val = val / 1_000_000
+    data_cell = ws.cell(row=31, column=4, value=val)
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
 
     ws.cell(row=32, column=3, value="Net Income:").font = label_font
-    ws.cell(row=32, column=4, value=nip.get("net_income")).font = data_arial_font
+    val = nip.get("net_income")
+    if val is not None:
+        val = val / 1_000_000
+    data_cell = ws.cell(row=32, column=4, value=val)
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
 
     ws.cell(row=33, column=3, value="Years Payback:").font = label_font
-    ws.cell(row=33, column=4, value=nip.get("years_payback_lt_debt")).font = data_arial_font
+    data_cell = ws.cell(row=33, column=4, value=nip.get("years_payback_lt_debt"))
+    data_cell.number_format = '#,##0.0'
+    data_cell.font = data_arial_font
 
     # Addback Net Inc Payback Section Texts
     ws.cell(row=35, column=2, value="The measure of how quickly debt is repaid by addback net income is a good measure, as it starts with GAAP").font = data_arial_font
@@ -1039,18 +1093,35 @@ def write_studies_sheet(writer, final_output):
 
     # Addback Net Inc Payback Data
     ws.cell(row=39, column=3, value="L.T. Debt:").font = label_font
-    ws.cell(row=39, column=4, value=anip.get("lt_debt")).font = data_arial_font
+    val = anip.get("lt_debt")
+    if val is not None:
+        val = val / 1_000_000
+    data_cell = ws.cell(row=39, column=4, value=val)
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
 
     ws.cell(row=40, column=3, value="Net Income:").font = label_font
-    ws.cell(row=40, column=4, value=anip.get("net_income")).font = data_arial_font
+    val = anip.get("net_income")
+    if val is not None:
+        val = val / 1_000_000
+    data_cell = ws.cell(row=40, column=4, value=val)
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
 
     ws.cell(row=41, column=3, value="Addback:").font = label_font
-    ws.cell(row=41, column=4, value=anip.get("addback")).font = data_arial_font
+    val = anip.get("addback")
+    if val is not None:
+        val = val / 1_000_000
+    data_cell = ws.cell(row=41, column=4, value=val)
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
     ws.cell(row=41, column=5, value="Merger charges, writedowns above the line, dep. Amort below the line less capex").font = data_arial_font
 
     ws.cell(row=42, column=3, value="Years Payback:").font = label_font
-    ws.cell(row=42, column=4, value=anip.get("years_payback")).font = data_arial_font
-
+    data_cell = ws.cell(row=42, column=4, value=anip.get("years_payback"))
+    data_cell.number_format = '#,##0'
+    data_cell.font = data_arial_font
+    
     # Apply data fills to specified ranges
     def data_fill_range(ws, top_row, left_col, bottom_row, right_col):
         for rr in range(top_row, bottom_row + 1):
