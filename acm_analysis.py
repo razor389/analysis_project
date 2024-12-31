@@ -9,6 +9,7 @@ from forum_post_summary import generate_post_summary
 from forum_posts import fetch_all_for_ticker
 from dotenv import load_dotenv
 from gen_excel import generate_excel_for_ticker_year
+from outlook_ticker_search import filter_emails_by_ticker
 
 # Load the .env file
 load_dotenv()
@@ -1086,6 +1087,51 @@ def normalize_data(data, key=None):
         # For scalar values, format them using the current key context
         return format_number(data, key=key)
 
+def process_qualities(symbol, ignore_qualities=False, debug=False):
+    if not ignore_qualities:
+        # Fetch and filter data
+        fetch_all_for_ticker(symbol)
+        filter_emails_by_ticker(symbol)
+        
+        # Define filenames
+        posts_filename = os.path.join("output", f"{symbol}_posts.json")
+        emails_filename = os.path.join("output", f"{symbol}_sent_emails.json")
+        combined_filename = os.path.join("output", f"{symbol}_combined_debug.json")
+        
+        try:
+            # Initialize combined data
+            combined_data = []
+
+            # Load posts if the file exists
+            if os.path.exists(posts_filename):
+                with open(posts_filename, "r", encoding="utf-8") as f:
+                    posts = json.load(f)
+                    combined_data.extend(posts)
+
+            # Load emails if the file exists
+            if os.path.exists(emails_filename):
+                with open(emails_filename, "r", encoding="utf-8") as f:
+                    emails = json.load(f)
+                    combined_data.extend(emails)
+
+            # Optionally write combined data to a debug file
+            if debug:
+                with open(combined_filename, "w", encoding="utf-8") as f:
+                    json.dump(combined_data, f, indent=4)
+                print(f"Combined data written to {combined_filename} for debugging.")
+
+            if combined_data:
+                # Call your existing generate_post_summary() function
+                print(f"Attempting to generate post summaries for {symbol}")
+                return generate_post_summary(combined_data, symbol)
+            else:
+                print(f"No posts or emails found for {symbol}. Skipping summary.")
+                return "No forum summary available."
+
+        except Exception as e:
+            print(f"Error processing data for {symbol}: {e}")
+            return "Error generating summary."
+
 def finalize_output(rearranged_output):
     """
     Apply normalization and formatting to the rearranged output.
@@ -1098,12 +1144,13 @@ def finalize_output(rearranged_output):
 if __name__ == "__main__":
     # Command line arguments: symbol start_year end_year
     if len(sys.argv) < 3:
-        print("Usage: python fmp_analysis.py SYMBOL START_YEAR [--ignore_qualities]")
+        print("Usage: python fmp_analysis.py SYMBOL START_YEAR [--ignore_qualities] [--debug]")
         sys.exit(1)
 
     symbol = sys.argv[1].upper()
     start_year = int(sys.argv[2])
     ignore_qualities = "--ignore_qualities" in sys.argv
+    debug = "--debug" in sys.argv
 
     if not FMP_API_KEY:
         print("ERROR: FMP_API_KEY not found in environment. Please set FMP_API_KEY in .env")
@@ -1170,30 +1217,9 @@ if __name__ == "__main__":
         "qualities": ""
     }
 
-    if not ignore_qualities:
-        fetch_all_for_ticker(symbol)
-        posts_filename = os.path.join("output", f"{symbol}_posts.json")
-
-        try:
-            if os.path.exists(posts_filename):
-                # Load the posts
-                with open(posts_filename, "r", encoding="utf-8") as f:
-                    posts = json.load(f)
-
-                # Call your existing generate_post_summary() function
-                print(f"attempting to generate post summaries for {symbol}")
-                forum_summary = generate_post_summary(posts, symbol)
-
-                # Store the summary text in final_output
-                final_output["qualities"] = forum_summary
-
-            else:
-                print(f"No forum posts found at {posts_filename}. Skipping summary.")
-                final_output["qualities"] = "No forum summary available."
-
-        except Exception as e:
-            print(f"Error generating forum-post summary: {e}")
-            final_output["qualities"] = "Error generating forum summary."
+    # Process qualities
+    qualities = process_qualities(symbol, ignore_qualities=ignore_qualities, debug=debug)
+    final_output["qualities"] = qualities
 
     # Get current stock price from quote-short API
     current_stock_price = get_quote_short(symbol)
