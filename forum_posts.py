@@ -9,15 +9,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 WEBSITETOOLBOX_API_KEY = os.getenv("WEBSITETOOLBOX_API_KEY")
+WEBSITETOOLBOX_USERNAME = os.getenv("WEBSITETOOLBOX_USERNAME")
 
 # If your forum ID is "my_forum_id", you might need:
 # BASE_URL = "https://api.websitetoolbox.com/v1/my_forum_id"
-BASE_URL = "https://api.websitetoolbox.com/v1/api"
+BASE_URL = 'https://api.websitetoolbox.com/v1/api'
 
 # Common request headers
 HEADERS = {
-    "Accept": "application/json",
-    "x-api-key": WEBSITETOOLBOX_API_KEY
+    'Accept': 'application/json',
+    'x-api-key': WEBSITETOOLBOX_API_KEY
 }
 
 def get_categories():
@@ -26,7 +27,7 @@ def get_categories():
     If you have many categories, handle pagination with has_more, total_size, etc.
     """
     url = f"{BASE_URL}/categories"
-    response = requests.get(url, headers=HEADERS)
+    response = requests.get(url, params={}, headers=HEADERS)
     response.raise_for_status()
     return response.json()
 
