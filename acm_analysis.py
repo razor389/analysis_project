@@ -1160,18 +1160,11 @@ if __name__ == "__main__":
     
      # Get the company's fiscal year end
     fye_string = get_fiscal_year_end(symbol)
-    end_year = derive_most_recent_fiscal_year(fye_string)
+    derived_end_year = derive_most_recent_fiscal_year(fye_string)
 
     # Fallback if we can't parse the FYE
-    if not end_year:
-        end_year = datetime.date.today().year - 1
-
-    # Validate years
-    if start_year > end_year:
-        print("START_YEAR cannot be greater than END_YEAR.")
-        sys.exit(1)
-
-    years_to_extract = list(range(start_year, end_year + 1))
+    if not derived_end_year:
+        derived_end_year = datetime.date.today().year - 1
 
     statement_types = ["bs", "ic", "cf", "bs-ar"]
     frequency = "annual"
@@ -1188,6 +1181,34 @@ if __name__ == "__main__":
     if not revenue_segmentation:
         print("Revenue segmentation data is empty. Proceeding without segmentation breakdown.")
 
+    # Determine the latest available year from financial statements
+    def get_latest_available_year(symbol: str, statement_types: list) -> int:
+        available_years = set()
+        for stmt in statement_types:
+            filename = f"{symbol}_{stmt}_annual.json"
+            data = load_json(filename)
+            financials = data.get("financials", [])
+            for entry in financials:
+                date_str = entry.get("date")
+                if date_str:
+                    year = int(date_str.split('-')[0])
+                    available_years.add(year)
+        if available_years:
+            return max(available_years)
+        return derived_end_year  # Fallback to derived_end_year if no data found
+
+    latest_data_year = get_latest_available_year(symbol, statement_types)
+    
+    # Set end_year to the lesser of derived_end_year and latest_data_year
+    end_year = min(derived_end_year, latest_data_year)
+
+    # Validate years
+    if start_year > end_year:
+        print("START_YEAR cannot be greater than END_YEAR.")
+        sys.exit(1)
+
+    years_to_extract = list(range(start_year, end_year + 1))
+    
     # Fetch company profile
     profile = get_company_profile(symbol)
     
