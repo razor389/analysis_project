@@ -147,7 +147,6 @@ def fetch_all_for_ticker(ticker):
 
         # Build a simplified post record (adding the author email)
         simplified_posts.append({
-            "postId": post_id,
             "timestamp": post.get("postTimestamp", 0),
             "message": clean_message,
             "authorEmail": author_email

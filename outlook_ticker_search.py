@@ -55,6 +55,36 @@ def is_valid_ticker(ticker: str) -> bool:
     """Validate ticker format (1-5 uppercase letters)"""
     return bool(re.match(r'^[A-Z]{1,5}$', ticker))
 
+def clean_message(raw_message: str) -> str:
+    """
+    Cleans the raw email message by removing excessive line breaks,
+    email signatures, and other boilerplate text.
+    """
+    # Remove email signatures (common patterns)
+    signature_patterns = [
+        r'Scott Granowski CFA®, CFP®\s+Academy Capital Management.*',  # Adjust as needed
+        r'Sent via .*',  # Remove lines like "Sent via the Samsung Galaxy..."
+        r'-------- Original message --------.*',  # Remove original message blocks
+        r'From: .*',  # Remove lines starting with From:
+        r'[\r\n]{2,}',  # Replace multiple line breaks with two
+    ]
+    
+    cleaned = raw_message
+
+    for pattern in signature_patterns:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+
+    # Replace multiple line breaks with single space
+    cleaned = re.sub(r'[\r\n]+', ' ', cleaned)
+
+    # Remove any remaining excessive whitespace
+    cleaned = re.sub(r'\s{2,}', ' ', cleaned)
+
+    # Trim leading and trailing whitespace
+    cleaned = cleaned.strip()
+
+    return cleaned
+
 def filter_emails(messages, ticker: str) -> List[Dict[str, Any]]:
     filtered_emails = []
     processed_count = 0
@@ -71,12 +101,14 @@ def filter_emails(messages, ticker: str) -> List[Dict[str, Any]]:
 
             if re.search(pattern, subject.upper()):
                 sent_time = message.SentOn.strftime('%Y-%m-%d %H:%M:%S')
-                body_content = str(message.Body).strip()
+                raw_body = str(message.Body).strip()
+                cleaned_body = clean_message(raw_body) 
 
                 logging.info(f"Found {ticker_upper} in email subject: {subject}")
                 filtered_emails.append({
                     "timestamp": sent_time,
-                    "message": body_content
+                    "message": cleaned_body,
+                    "authorEmail": "smgacm@gmail.com"
                 })
 
             processed_count += 1
