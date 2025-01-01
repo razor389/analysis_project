@@ -5,8 +5,6 @@ import requests
 from dotenv import load_dotenv
 from acm_analysis import get_yearly_high_low_yahoo
 
-NUM_RESULTS = 5
-
 def load_api_key():
     """Load the API key from the .env file."""
     load_dotenv()
@@ -125,7 +123,7 @@ def calculate_statistics(ticker, financial_data):
         print(f"Error calculating statistics for {ticker}: {str(e)}")
         return None
 
-def get_industry_peers_with_stats(ticker, save_to_file = False):
+def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file = False):
     """Get industry peers and calculate statistics for all companies."""
     api_key = load_api_key()
     if not api_key:
@@ -174,7 +172,7 @@ def get_industry_peers_with_stats(ticker, save_to_file = False):
             seen_names.add(stock_name)
     
     # Get top peers from deduplicated results
-    top_peers = [stock['symbol'] for stock in unique_results[:NUM_RESULTS]]
+    top_peers = [stock['symbol'] for stock in unique_results[:num_comps]]
     all_tickers = [ticker] + top_peers
     
     # Calculate statistics for all companies
