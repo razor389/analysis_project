@@ -190,7 +190,7 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file = False):
     
     if save_to_file:
         # Save to JSON file
-        output_file = f"{ticker}_peer_analysis.json"
+        output_file = os.path.join('output', f'{ticker}_peer_analysis.json')
         with open(output_file, 'w') as f:
             json.dump(result, f, indent=4)
     
