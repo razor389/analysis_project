@@ -333,8 +333,8 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict):
         operating_earnings_pct = (operating_earnings / revenues) if (operating_earnings is not None and revenues) else None
 
         income_tax_expense = ic.get('incomeTaxExpense')
-        interest_and_other_income_expense = ic.get('totalOtherIncomeExpensesNet')
-        extern_costs = income_tax_expense - interest_and_other_income_expense if (income_tax_expense and interest_and_other_income_expense) else None
+        interest_and_other_income_expense = -1 * ic.get('totalOtherIncomeExpensesNet')
+        extern_costs = income_tax_expense + interest_and_other_income_expense if (income_tax_expense and interest_and_other_income_expense) else None
 
         earnings = operating_earnings - extern_costs if (operating_earnings and extern_costs) else None
         stmt_cf_share_repurchase = cf.get('commonStockRepurchased')
@@ -1208,7 +1208,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     years_to_extract = list(range(start_year, end_year + 1))
-    
+
     # Fetch company profile
     profile = get_company_profile(symbol)
     
