@@ -2,14 +2,14 @@ import json
 import os
 import sys
 import requests
-import yfinance as yf
-import pandas as pd
 import datetime
 from forum_post_summary import generate_post_summary
 from forum_posts import fetch_all_for_ticker
 from dotenv import load_dotenv
 from gen_excel import generate_excel_for_ticker_year
 from outlook_ticker_search import filter_emails_by_ticker
+from industry_comp import get_industry_peers_with_stats
+from yahoo_finance_utils import get_yearly_high_low_yahoo
 
 # Load the .env file
 load_dotenv()
@@ -191,27 +191,6 @@ def load_json(filename: str) -> dict:
         return {}
     with open(filepath, "r") as f:
         return json.load(f)
-
-def get_yearly_high_low_yahoo(symbol: str, year: int):
-    """
-    Fetch daily stock data from Yahoo Finance for the given year and return the yearly high and low.
-    """
-    start_date = f"{year}-01-01"
-    end_date = f"{year}-12-31"
-    df = yf.download(symbol, start=start_date, end=end_date, progress=False)
-    if df.empty:
-        return None, None
-
-    yearly_high = df['High'].max()
-    yearly_low = df['Low'].min()
-
-    # Convert from numpy floats to Python floats
-    if yearly_high is not None:
-        yearly_high = yearly_high.item()
-    if yearly_low is not None:
-        yearly_low = yearly_low.item()
-
-    return yearly_high, yearly_low
 
 def extract_series_values_by_year(basic_data: dict, key: str) -> dict:
     """
@@ -1021,7 +1000,8 @@ def transform_final_output(final_output: dict, stock_price: float = None):
             "balance_sheet_characteristics": final_output.get("balance_sheet_characteristics", {}),
             "data": balance_sheet_data
         },
-        "studies": studies
+        "studies": studies,
+        "industry": final_output.get("industry_comparison", {})
     }
 
     rearranged["qualities"] = final_output.get("qualities")
@@ -1224,6 +1204,17 @@ if __name__ == "__main__":
     # Compute Profit Description Characteristics
     profit_description_characteristics = compute_profit_description_characteristics(yoy_data)
 
+    # Fetch industry comparison data
+    try:
+        industry_data = get_industry_peers_with_stats(symbol)
+    except Exception as e:
+        print(f"Error fetching industry data: {e}")
+        industry_data = {
+            "operatingStatistics": {},
+            "marketStatistics": {}
+        }
+
+
     # Create final output structure with a "header"
     final_output = {
         "symbol": profile.get("symbol", symbol),
@@ -1237,7 +1228,8 @@ if __name__ == "__main__":
         "balance_sheet_characteristics": balance_sheet_characteristics,
         "profit_description_characteristics": profit_description_characteristics,
         "data": yoy_data,
-        "qualities": ""
+        "qualities": "",
+        "industry_comparison": industry_data 
     }
 
     # Process qualities

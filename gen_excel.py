@@ -23,6 +23,8 @@ data_arial_font = Font(name = "Arial", size=10)
 data_arial_bold_font = Font(name ="Arial", size=10, bold=True)
 data_arial_italic_font = Font(name = "Arial", size=10, italic=True)
 
+center_alignment = Alignment(horizontal="center", vertical="center")
+
 # Define a thin black border
 thin_border = Border(
     left=Side(style='thin', color='000000'),
@@ -105,15 +107,10 @@ def load_final_output(ticker):
         data = json.load(f)
     return data
 
-def create_or_append_xls(xls_filename):
-    file_exists = os.path.exists(xls_filename)
-    if file_exists:
-        # Append mode with overlay if sheet exists
-        writer = pd.ExcelWriter(xls_filename, engine='openpyxl', mode='a', if_sheet_exists='overlay')
-    else:
-        # Create a new workbook
-        writer = pd.ExcelWriter(xls_filename, engine='openpyxl', mode='w')
-    return writer, file_exists
+def create_xls(xls_filename):
+    if os.path.exists(xls_filename):
+        print(f"Overwriting existing file: {xls_filename}")
+    return pd.ExcelWriter(xls_filename, engine='openpyxl', mode='w')
 
 def write_summary_sheet(writer, final_output):
     wb = writer.book
@@ -1154,6 +1151,10 @@ def write_qualities_sheet(writer, final_output):
     Each '\n' in the text forces a new line in the sheet.
     Within each line, we wrap at ~100 characters. Times New Roman, size 10 font.
     """
+    # Early return if qualities is None/null
+    if not final_output.get("qualities"):
+        return
+    
     wb = writer.book
 
     # If the sheet doesn't exist yet, create it
@@ -1226,6 +1227,147 @@ def write_qualities_sheet(writer, final_output):
     # Remove gridlines on this sheet if you prefer
     ws.sheet_view.showGridLines = False
 
+def write_industry_sheet(writer, final_output):
+    """
+    Write the Industry sheet with operating and market statistics
+    
+    Parameters:
+    writer: ExcelWriter object
+    final_output: Dictionary containing the full output data including industry statistics
+    """
+    # Early return if qualities is None/null
+    if not final_output.get("industry"):
+        return
+    
+    wb = writer.book
+    
+    # If the sheet doesn't exist yet, create it
+    if "Industry" not in wb.sheetnames:
+        wb.create_sheet("Industry")
+    ws = wb["Industry"]
+
+    industry_data = final_output["industry"]
+
+    # Write and format the "Industry Overview" title
+    title_cell = ws.cell(row=1, column=6, value="Industry Overview")
+    title_cell.fill = label_fill
+    title_cell.font = title_font
+    title_cell.alignment = center_alignment
+    apply_table_border(ws, 1, 5, 7)
+    title_fill_range(ws, 1, 5, 7)
+
+    # Write Operating Statistics section
+    op_stats_cell = ws.cell(row=3, column=2, value="Operating Statistics:")
+    op_stats_cell.fill = label_fill
+    op_stats_cell.font = label_font
+    op_stats_cell.border = thin_border
+    
+    # Get companies (tickers)
+    companies = industry_data["operatingStatistics"].keys()
+    
+    # Define the operating statistics columns and their formats
+    op_stats_columns = {
+        "Company": (2, None),  # Column B, no special format
+        "Debt(yrs.)": (4, '#,##0.0'),  # Column D
+        "Sales": (6, '#,##0'),  # Column F
+        "ROC": (8, '0.0%'),  # Column H
+        "Operating Margin": (10, '0.0%')  # Column J
+    }
+
+    # Write operating statistics headers and data
+    row = 5  # Start at row 5
+    
+    # Write headers
+    for label, (col, _) in op_stats_columns.items():
+        cell = ws.cell(row=row, column=col, value=label)
+        cell.fill = label_fill
+        cell.font = label_font
+        cell.border = thin_border
+        cell.alignment = center_alignment
+
+    # Write company data
+    for company in companies:
+        row += 1
+        # Write company name
+        company_cell = ws.cell(row=row, column=2, value=company)
+        company_cell.font = data_arial_font
+        company_cell.alignment = center_alignment
+        company_data = industry_data["operatingStatistics"][company]
+        
+        # Write operating statistics
+        col_mappings = {
+            "Debt(yrs.)": (4, "Debt(yrs.)"),
+            "Sales": (6, "Sales"),
+            "ROC": (8, "ROC"),
+            "Operating Margin": (10, "Operating Margin")
+        }
+
+        for label, (col, key) in col_mappings.items():
+            value = company_data[key]
+            cell = ws.cell(row=row, column=col, value=value)
+            cell.font = data_arial_font
+            cell.alignment = center_alignment
+            cell.number_format = op_stats_columns[label][1]
+
+            # Convert Sales to millions
+            if key == "Sales":
+                cell.value = value / 1_000_000
+
+    last_op_stats_row = row
+
+    # Market Statistics section
+    market_stats_start_row = last_op_stats_row + 3
+    market_stats_cell = ws.cell(row=market_stats_start_row, column=2, value="Market Statistics:")
+    market_stats_cell.fill = label_fill
+    market_stats_cell.font = label_font
+    market_stats_cell.border = thin_border
+
+    # Define the market statistics columns and their formats
+    market_stats_columns = {
+        "Company": (2, None),  # Column B, no special format
+        "P/B": (4, '#,##0.00'),  # Column D
+        "P/E": (6, '#,##0.0'),  # Column F
+        "Div. Yld.": (8, '0.00%'),  # Column H
+        "EV/Sales": (10, '#,##0.00')  # Column J
+    }
+
+    # Write market statistics headers
+    row = market_stats_start_row + 2
+    for label, (col, _) in market_stats_columns.items():
+        cell = ws.cell(row=row, column=col, value=label)
+        cell.fill = label_fill
+        cell.font = label_font
+        cell.border = thin_border
+        cell.alignment = center_alignment
+
+    # Write market statistics data
+    for company in companies:
+        row += 1
+        # Write company name
+        company_cell = ws.cell(row=row, column=2, value=company)
+        company_cell.font = data_arial_font
+        company_cell.alignment = center_alignment
+        company_data = industry_data["marketStatistics"][company]
+        
+        # Write market statistics
+        col_mappings = {
+            "P/B": (4, "P/B"),
+            "P/E": (6, "P/E"),
+            "Div. Yld.": (8, "Div. Yld."),
+            "EV/Sales": (10, "EV/Sales")
+        }
+
+        for label, (col, key) in col_mappings.items():
+            value = company_data[key]
+            cell = ws.cell(row=row, column=col, value=value)
+            cell.font = data_arial_font
+            cell.alignment = center_alignment
+            cell.number_format = market_stats_columns[label][1]
+
+    # Adjust column widths
+    for col in range(1, 11):
+        ws.column_dimensions[get_column_letter(col)].width = 15
+
 def generate_excel_for_ticker_year(ticker: str, year: int):
     """
     Generate the Excel file for the given ticker and year, writing to:
@@ -1243,7 +1385,7 @@ def generate_excel_for_ticker_year(ticker: str, year: int):
     final_output = load_final_output(ticker)
 
     # 2. Create or append to the Excel file
-    writer, file_exists = create_or_append_xls(xls_filename)
+    writer = create_xls(xls_filename)
 
     # 3. Write data to each sheet
     write_summary_sheet(writer, final_output)
@@ -1253,6 +1395,7 @@ def generate_excel_for_ticker_year(ticker: str, year: int):
     write_balance_sheet_sheet(writer, final_output)
     write_studies_sheet(writer, final_output)
     write_qualities_sheet(writer, final_output)
+    write_industry_sheet(writer, final_output)
 
     # 4. Apply workbook formatting (remove gridlines, etc.)
     format_workbook(writer)
@@ -1265,7 +1408,7 @@ def generate_excel_for_ticker_year(ticker: str, year: int):
 if __name__ == "__main__":
     # Usage: python write_excel.py TICKER target_file.xls
     if len(sys.argv) < 3:
-        print("Usage: python write_excel.py TICKER XLS_FILENAME")
+        print("Usage: python gen_excel.py TICKER XLS_FILENAME")
         sys.exit(1)
 
     ticker = sys.argv[1].upper()
@@ -1274,14 +1417,7 @@ if __name__ == "__main__":
     final_output = load_final_output(ticker)
 
     # Create or append to xls file
-    writer, file_exists = create_or_append_xls(xls_filename)
-
-    # If file doesn't exist, we might need to create the sheets first.
-    # If the file exists and has sheets, we skip this step because they should already exist.
-    if not file_exists:
-        # Create empty sheets if needed, because pandas to_excel() won't create empty sheets if no data
-        # However, since we are writing dataframes, they will create sheets automatically.
-        pass
+    writer = create_xls(xls_filename)
 
     # Now write data to each sheet
     write_summary_sheet(writer, final_output)
@@ -1291,6 +1427,7 @@ if __name__ == "__main__":
     write_balance_sheet_sheet(writer, final_output)
     write_studies_sheet(writer, final_output)
     write_qualities_sheet(writer, final_output)
+    write_industry_sheet(writer, final_output)
 
     # Apply formatting: set font to Arial size 10 for non-formatted cells and remove gridlines
     format_workbook(writer)

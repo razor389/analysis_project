@@ -4,7 +4,8 @@ import json
 import requests
 import logging
 from dotenv import load_dotenv
-from acm_analysis import get_yearly_high_low_yahoo
+
+from yahoo_finance_utils import get_yearly_high_low_yahoo
 
 # Configure logging
 logging.basicConfig(
