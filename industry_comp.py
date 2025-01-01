@@ -106,17 +106,17 @@ def calculate_statistics(ticker, financial_data):
         return {
             "operatingStatistics": {
                 ticker: {
-                    "Debt(yrs.)": round(years_payback, 2) if years_payback else None,
-                    "Sales": int(revenues / 1_000_000),
-                    "ROC": round(roc*100, 2),
-                    "Operating Margin": round(operating_margin*100, 2)
+                    "Debt(yrs.)": round(years_payback, 1) if years_payback else None,
+                    "Sales": revenues,
+                    "ROC": roc,
+                    "Operating Margin": operating_margin
                 }
             },
             "marketStatistics": {
                 ticker: {
                     "P/B": round(pb_ratio, 2),
-                    "P/E": round(pe_ratio, 2),
-                    "Div. Yld.": round(div_yield * 100, 2),
+                    "P/E": round(pe_ratio, 1),
+                    "Div. Yld.": div_yield,
                     "EV/Sales": round(ev_sales, 2)
                 }
             }
@@ -125,7 +125,7 @@ def calculate_statistics(ticker, financial_data):
         print(f"Error calculating statistics for {ticker}: {str(e)}")
         return None
 
-def get_industry_peers_with_stats(ticker):
+def get_industry_peers_with_stats(ticker, save_to_file = False):
     """Get industry peers and calculate statistics for all companies."""
     api_key = load_api_key()
     if not api_key:
@@ -190,10 +190,11 @@ def get_industry_peers_with_stats(ticker):
             result["operatingStatistics"].update(stats["operatingStatistics"])
             result["marketStatistics"].update(stats["marketStatistics"])
     
-    # Save to JSON file
-    output_file = f"{ticker}_peer_analysis.json"
-    with open(output_file, 'w') as f:
-        json.dump(result, f, indent=4)
+    if save_to_file:
+        # Save to JSON file
+        output_file = f"{ticker}_peer_analysis.json"
+        with open(output_file, 'w') as f:
+            json.dump(result, f, indent=4)
     
     return result
 
