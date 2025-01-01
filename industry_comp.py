@@ -2,16 +2,31 @@ import datetime
 import os
 import json
 import requests
+import logging
 from dotenv import load_dotenv
 from acm_analysis import get_yearly_high_low_yahoo
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 def load_api_key():
     """Load the API key from the .env file."""
+    logger.info("Loading API key from .env file")
     load_dotenv()
-    return os.getenv("FMP_API_KEY")
+    api_key = os.getenv("FMP_API_KEY")
+    if api_key:
+        logger.info("API key loaded successfully")
+    else:
+        logger.error("Failed to load API key")
+    return api_key
 
 def get_financial_data(ticker, api_key):
     """Fetch all required financial statements for a ticker."""
+    logger.info(f"Fetching financial data for ticker: {ticker}")
     base_url = "https://financialmodelingprep.com/api/v3"
     
     endpoints = {
@@ -23,17 +38,22 @@ def get_financial_data(ticker, api_key):
     
     data = {}
     for key, url in endpoints.items():
+        logger.debug(f"Requesting data from endpoint: {key}")
         response = requests.get(url, params={"apikey": api_key})
         if response.status_code == 200:
             if key == "quote":
                 data[key] = response.json()[0] if response.json() else None
             else:
                 data[key] = response.json()[0] if response.json() else None
+            logger.debug(f"Successfully retrieved {key} data")
+        else:
+            logger.error(f"Failed to fetch {key} data. Status code: {response.status_code}")
     
     return data
 
 def calculate_statistics(ticker, financial_data):
     """Calculate operating and market statistics for a ticker."""
+    logger.info(f"Calculating statistics for ticker: {ticker}")
     try:
         ic = financial_data.get('ic', {})
         bs = financial_data.get('bs', {})
@@ -48,6 +68,8 @@ def calculate_statistics(ticker, financial_data):
         ebit = ic.get('operatingIncome', 0)
         shareholder_equity = bs.get('totalStockholdersEquity', 0)
         
+        logger.debug(f"Base metrics - Price: {current_stock_price}, Shares: {shares_outstanding}, Revenue: {revenues}")
+        
         # Calculate liabilities and debt
         total_liabilities = bs.get('totalLiabilities', 0)
         capital_lease_obligations = bs.get('capitalLeaseObligations', 0)
@@ -57,49 +79,41 @@ def calculate_statistics(ticker, financial_data):
         current_liabilities = bs.get('totalCurrentLiabilities', 0)
         lt_debt = total_debt - current_liabilities
         bs_long_term_debt = bs.get('longTermDebt', 0)
+        
+        logger.debug(f"Debt calculations - Total debt: {total_debt}, LT debt: {lt_debt}")
+        
         # Operating Statistics Calculations
-        
-        # Operating Margin = EBIT / Revenue
         operating_margin = (ebit / revenues) if revenues else 0
-        
-        # ROC = Net Profit / (Shareholder Equity + Long Term Debt)
         total_capital = shareholder_equity + bs_long_term_debt
         roc = (net_profit / total_capital) if total_capital else 0
         
-        # Years Payback calculation
         cash_equiv = bs.get('cashAndCashEquivalents', 0)
         sti = bs.get('shortTermInvestments', 0)
         addback = cash_equiv + sti
         years_payback = ((lt_debt - addback) / net_profit) if net_profit else None
         
+        logger.debug(f"Operating metrics - Margin: {operating_margin}, ROC: {roc}, Years payback: {years_payback}")
+        
         # Market Statistics Calculations
-        
-        # Book value per share
         book_value_per_share = shareholder_equity / shares_outstanding if shares_outstanding else 0
-        
-        # P/B ratio
         pb_ratio = current_stock_price / book_value_per_share if book_value_per_share else 0
-        
-        # Operating EPS and P/E
         operating_eps = net_profit / shares_outstanding if shares_outstanding else 0
         pe_ratio = current_stock_price / operating_eps if operating_eps else 0
         
-        # Get year from financial statements
         statement_date = ic.get('date')
         statement_year = int(statement_date.split('-')[0]) if statement_date else datetime.now().year
         
-        # Get yearly high/low for average price calculation
         yearly_high, yearly_low = get_yearly_high_low_yahoo(ticker, statement_year)
         average_price = (yearly_high + yearly_low) / 2 if yearly_high is not None and yearly_low is not None else current_stock_price
         
-        # Dividend Yield
         dividends_paid = -1 * cf.get('dividendsPaid', 0)
         dividends_per_share = dividends_paid / shares_outstanding if shares_outstanding else 0
         div_yield = (dividends_per_share / average_price) if average_price else 0
         
-        # EV/Sales
         market_cap = current_stock_price * shares_outstanding
         ev_sales = ((market_cap + bs_long_term_debt) / revenues) if revenues else 0
+        
+        logger.debug(f"Market metrics - P/B: {pb_ratio}, P/E: {pe_ratio}, Div Yield: {div_yield}")
         
         return {
             "operatingStatistics": {
@@ -120,23 +134,27 @@ def calculate_statistics(ticker, financial_data):
             }
         }
     except Exception as e:
-        print(f"Error calculating statistics for {ticker}: {str(e)}")
+        logger.error(f"Error calculating statistics for {ticker}: {str(e)}", exc_info=True)
         return None
 
-def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file = False):
+def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file=False):
     """Get industry peers and calculate statistics for all companies."""
+    logger.info(f"Getting industry peers and stats for ticker: {ticker}")
     api_key = load_api_key()
     if not api_key:
+        logger.error("API key not found")
         raise ValueError("API key not found")
     
     # First get company industry
     profile_url = f"https://financialmodelingprep.com/api/v3/profile/{ticker}"
     response = requests.get(profile_url, params={"apikey": api_key})
     if response.status_code != 200:
+        logger.error(f"Error fetching profile. Status code: {response.status_code}")
         raise Exception(f"Error fetching profile: {response.status_code}")
     
     profile = response.json()[0]
     industry = profile.get("industry")
+    logger.info(f"Industry identified: {industry}")
     
     # Get peers
     screener_url = "https://financialmodelingprep.com/api/v3/stock-screener"
@@ -149,16 +167,16 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file = False):
     
     response = requests.get(screener_url, params=params)
     if response.status_code != 200:
+        logger.error(f"Error fetching peers. Status code: {response.status_code}")
         raise Exception(f"Error fetching peers: {response.status_code}")
     
     peers = response.json()
     sorted_peers = sorted(peers, key=lambda x: x.get('marketCap', 0), reverse=True)
     
-    # Get the searched company's name
     searched_company = next((p for p in sorted_peers if p['symbol'] == ticker), None)
     company_name = searched_company.get('companyName') if searched_company else None
+    logger.info(f"Found company: {company_name}")
     
-    # Deduplicate results by excluding the searched company by both symbol and name
     unique_results = []
     seen_names = set()
     for stock in sorted_peers:
@@ -171,26 +189,28 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file = False):
             unique_results.append(stock)
             seen_names.add(stock_name)
     
-    # Get top peers from deduplicated results
     top_peers = [stock['symbol'] for stock in unique_results[:num_comps]]
-    all_tickers = [ticker] + top_peers
+    logger.info(f"Selected peers: {', '.join(top_peers)}")
     
-    # Calculate statistics for all companies
+    all_tickers = [ticker] + top_peers
     result = {
         "operatingStatistics": {},
         "marketStatistics": {}
     }
     
     for t in all_tickers:
+        logger.info(f"Processing ticker: {t}")
         financial_data = get_financial_data(t, api_key)
         stats = calculate_statistics(t, financial_data)
         if stats:
             result["operatingStatistics"].update(stats["operatingStatistics"])
             result["marketStatistics"].update(stats["marketStatistics"])
+        else:
+            logger.warning(f"No statistics calculated for ticker: {t}")
     
     if save_to_file:
-        # Save to JSON file
         output_file = os.path.join('output', f'{ticker}_peer_analysis.json')
+        logger.info(f"Saving results to file: {output_file}")
         with open(output_file, 'w') as f:
             json.dump(result, f, indent=4)
     
@@ -199,15 +219,19 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file = False):
 def main():
     ticker = input("Enter a ticker symbol: ").strip().upper()
     if not ticker:
+        logger.error("No ticker symbol provided")
         print("Ticker symbol is required.")
         return
     
+    logger.info(f"Starting industry comparison analysis for ticker: {ticker}")
     try:
         result = get_industry_peers_with_stats(ticker)
-        print(f"Analysis complete. Results saved to {ticker}_peer_analysis.json")
+        print(f"Analysis complete.")
         print("\nSummary:")
         print(json.dumps(result, indent=2))
+        logger.info("Industry comparison analysis completed successfully")
     except Exception as e:
+        logger.error(f"Industry comparison analysis failed: {str(e)}", exc_info=True)
         print(f"An error occurred: {str(e)}")
 
 if __name__ == "__main__":
