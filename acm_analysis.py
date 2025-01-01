@@ -286,7 +286,7 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict):
         ebit = ic.get('operatingIncome')
         dividends_paid = -1 * cf.get('dividendsPaid', 0)
         shareholder_equity = bs.get('totalStockholdersEquity')
-        long_term_debt = bs.get('longTermDebt')
+        long_term_debt =  (bs.get("longTermDebt") or 0) + (bs.get("shortTermDebt") or 0) - (bs.get("capitalLeaseObligations") or 0)
         provision_for_taxes = ic.get('incomeTaxExpense')
         pretax_income = ic.get('incomeBeforeTax')
         depreciation = cf.get('depreciationAndAmortization')
@@ -926,7 +926,7 @@ def transform_final_output(final_output: dict, stock_price: float = None):
                                      other_current_liabilities + deferred_revenue +
                                      short_term_debt)
 
-        lt_debt = total_debt - total_current_liabilities
+        lt_debt = val(liab_breakdown.get("long_term_debt_minus_capital_lease_obligation"))+short_term_debt
         lt_capital = total_capital - total_current_liabilities
 
         # net income from profit_description (earnings)

@@ -76,16 +76,13 @@ def calculate_statistics(ticker, financial_data):
         capital_lease_obligations = bs.get('capitalLeaseObligations', 0)
         total_debt = total_liabilities - capital_lease_obligations
         
-        # Current liabilities
-        current_liabilities = bs.get('totalCurrentLiabilities', 0)
-        lt_debt = total_debt - current_liabilities
-        bs_long_term_debt = bs.get('longTermDebt', 0)
+        lt_debt =  (bs.get("longTermDebt") or 0) + (bs.get("shortTermDebt") or 0) - (bs.get("capitalLeaseObligations") or 0)
         
         logger.debug(f"Debt calculations - Total debt: {total_debt}, LT debt: {lt_debt}")
         
         # Operating Statistics Calculations
         operating_margin = (ebit / revenues) if revenues else 0
-        total_capital = shareholder_equity + bs_long_term_debt
+        total_capital = shareholder_equity + lt_debt
         roc = (net_profit / total_capital) if total_capital else 0
         
         cash_equiv = bs.get('cashAndCashEquivalents', 0)
@@ -112,7 +109,7 @@ def calculate_statistics(ticker, financial_data):
         div_yield = (dividends_per_share / average_price) if average_price else 0
         
         market_cap = current_stock_price * shares_outstanding
-        ev_sales = ((market_cap + bs_long_term_debt) / revenues) if revenues else 0
+        ev_sales = ((market_cap + lt_debt) / revenues) if revenues else 0
         
         logger.debug(f"Market metrics - P/B: {pb_ratio}, P/E: {pe_ratio}, Div Yield: {div_yield}")
         
