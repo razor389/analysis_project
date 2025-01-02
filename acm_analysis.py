@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from gen_excel import generate_excel_for_ticker_year
 from outlook_ticker_search import filter_emails_by_ticker
 from industry_comp import get_industry_peers_with_stats
-from yahoo_finance_utils import get_yearly_high_low_yahoo
+from utils import get_company_profile, get_current_market_cap_yahoo, get_current_quote_yahoo, get_reported_currency, get_yahoo_ticker, get_yearly_high_low_yahoo
 
 # Load the .env file
 load_dotenv()
@@ -242,7 +242,7 @@ def extract_series_values_by_year(basic_data: dict, key: str) -> dict:
 
     return result
 
-def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict):
+def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict, profile: dict):
     # Load the three financial statements
     bs_data = load_json(f"{symbol}_bs_annual.json")
     ic_data = load_json(f"{symbol}_ic_annual.json")
@@ -272,6 +272,7 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict):
 
     results = {}
     prev_shares_outstanding = None  # For buyback calculation
+    yahoo_symbol = get_yahoo_ticker(profile)
 
     for year in years:
         bs = bs_by_year.get(year, {})
@@ -327,7 +328,8 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict):
         tax_rate = (provision_for_taxes / pretax_income) if (provision_for_taxes and pretax_income) else None
 
         # Yearly high/low prices
-        yearly_high, yearly_low = get_yearly_high_low_yahoo(symbol, year)
+        
+        yearly_high, yearly_low = get_yearly_high_low_yahoo(yahoo_symbol, year)
         average_price = None
         if yearly_high is not None and yearly_low is not None:
             average_price = (yearly_high + yearly_low) / 2
@@ -843,34 +845,6 @@ def compute_profit_description_characteristics(yoy_data: dict):
 
     return results
 
-
-def get_company_profile(symbol: str):
-    """Fetch the company's profile from FMP."""
-    url = f"https://financialmodelingprep.com/api/v3/profile/{symbol}?apikey={FMP_API_KEY}"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        if isinstance(data, list) and len(data) > 0:
-            return data[0]  # Take the first profile item
-        return {}
-    except Exception as e:
-        print(f"Error fetching company profile for {symbol}: {e}")
-        return {}
-    
-def get_quote_short(symbol: str):
-    url = f"https://financialmodelingprep.com/api/v3/quote-short/{symbol}?apikey={FMP_API_KEY}"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        if isinstance(data, list) and len(data) > 0:
-            return data[0].get("price")  # price field
-        return None
-    except Exception as e:
-        print(f"Error fetching quote short for {symbol}: {e}")
-        return None
-
 def transform_final_output(final_output: dict, stock_price: float = None):
     yoy_data = final_output.get("data", {})
     sorted_years = sorted(yoy_data.keys())
@@ -980,7 +954,8 @@ def transform_final_output(final_output: dict, stock_price: float = None):
             "exchange": final_output.get("exchange"),
             "description": final_output.get("description"),
             "sector": final_output.get("sector"),
-            "industry": final_output.get("industry")
+            "industry": final_output.get("industry"),
+            "reported_currency": final_output.get("reported_currency"),
         },
         "company_description": {
             "fiscal_year_end": fiscal_year_end,
@@ -1192,8 +1167,11 @@ if __name__ == "__main__":
     # Fetch company profile
     profile = get_company_profile(symbol)
     
+    reported_currency = get_reported_currency(symbol)
+
     # Extract YOY data
-    yoy_data = extract_yoy_data(symbol, years_to_extract, revenue_segmentation)
+    yoy_data = extract_yoy_data(symbol, years_to_extract, 
+                                revenue_segmentation, profile)
 
     # Compute Investment Characteristics
     investment_characteristics = compute_investment_characteristics(yoy_data)
@@ -1213,7 +1191,11 @@ if __name__ == "__main__":
             "operatingStatistics": {},
             "marketStatistics": {}
         }
-
+    
+    # Get current stock price from quote-short API
+    yahoo_symbol = get_yahoo_ticker(profile)
+    current_stock_price = get_current_quote_yahoo(yahoo_symbol)
+    market_cap = get_current_market_cap_yahoo(yahoo_symbol)
 
     # Create final output structure with a "header"
     final_output = {
@@ -1221,7 +1203,8 @@ if __name__ == "__main__":
         "company_name": profile.get("companyName"),
         "exchange": profile.get("exchange"),
         "description": profile.get("description"),
-        "marketCapitalization": profile.get("mktCap"),
+        "marketCapitalization": market_cap,
+        "reported_currency": reported_currency,
         "sector": profile.get("sector"),
         "industry": profile.get("industry"),
         "investment_characteristics": investment_characteristics,
@@ -1229,15 +1212,12 @@ if __name__ == "__main__":
         "profit_description_characteristics": profit_description_characteristics,
         "data": yoy_data,
         "qualities": "",
-        "industry_comparison": industry_data 
+        "industry_comparison": industry_data
     }
 
     # Process qualities
     qualities = process_qualities(symbol, ignore_qualities=ignore_qualities, debug=debug)
     final_output["qualities"] = qualities
-
-    # Get current stock price from quote-short API
-    current_stock_price = get_quote_short(symbol)
 
     rearranged_output = transform_final_output(final_output, stock_price=current_stock_price)
     # rearranged_output = finalize_output(rearranged_output)  # apply normalization

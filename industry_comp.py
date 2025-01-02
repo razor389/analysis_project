@@ -5,7 +5,7 @@ import requests
 import logging
 from dotenv import load_dotenv
 
-from yahoo_finance_utils import get_yearly_high_low_yahoo
+from utils import get_yahoo_ticker, get_yearly_high_low_yahoo
 
 # Configure logging
 logging.basicConfig(
@@ -34,7 +34,8 @@ def get_financial_data(ticker, api_key):
         "ic": f"{base_url}/income-statement/{ticker}",
         "bs": f"{base_url}/balance-sheet-statement/{ticker}",
         "cf": f"{base_url}/cash-flow-statement/{ticker}",
-        "quote": f"{base_url}/quote-short/{ticker}"
+        "quote": f"{base_url}/quote-short/{ticker}",
+        "profile": f"{base_url}/profile/{ticker}"
     }
     
     data = {}
@@ -60,6 +61,7 @@ def calculate_statistics(ticker, financial_data):
         bs = financial_data.get('bs', {})
         cf = financial_data.get('cf', {})
         quote = financial_data.get('quote', {})
+        profile = financial_data.get('profile', {})
         
         # Basic financial metrics
         current_stock_price = quote.get('price', 0)
@@ -100,8 +102,8 @@ def calculate_statistics(ticker, financial_data):
         
         statement_date = ic.get('date')
         statement_year = int(statement_date.split('-')[0]) if statement_date else datetime.now().year
-        
-        yearly_high, yearly_low = get_yearly_high_low_yahoo(ticker, statement_year)
+        yahoo_ticker = get_yahoo_ticker(profile)
+        yearly_high, yearly_low = get_yearly_high_low_yahoo(yahoo_ticker, statement_year)
         average_price = (yearly_high + yearly_low) / 2 if yearly_high is not None and yearly_low is not None else current_stock_price
         
         dividends_paid = -1 * cf.get('dividendsPaid', 0)

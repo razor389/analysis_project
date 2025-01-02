@@ -143,6 +143,7 @@ def write_summary_sheet(writer, final_output):
         # Optionally, you can set font here if needed
 
 def write_company_description(writer, final_output):
+    reported_currency = final_output["summary"]["reported_currency"]
     cd_info = final_output["company_description"]
     cd_data = cd_info["data"]
     wb = writer.book
@@ -153,19 +154,28 @@ def write_company_description(writer, final_output):
     ws.freeze_panes = "B1"
 
     # Write and format labels
+    ws.cell(row=1, column=3, value="Currency").fill = label_fill
+    ws.cell(row=1, column=3).font = label_font
+    ws.cell(row=1, column=3).border = thin_border
+
     ws.cell(row=1, column=5, value="FY End").fill = label_fill
     ws.cell(row=1, column=5).font = label_font
     ws.cell(row=1, column=5).border = thin_border
 
-    ws.cell(row=1, column=8, value="Stock Price").fill = label_fill
-    ws.cell(row=1, column=8).font = label_font
-    ws.cell(row=1, column=8).border = thin_border
+    ws.cell(row=1, column=7, value="Stock Price").fill = label_fill
+    ws.cell(row=1, column=7).font = label_font
+    ws.cell(row=1, column=7).border = thin_border
 
-    ws.cell(row=1, column=11, value="Market Cap").fill = label_fill
-    ws.cell(row=1, column=11).font = label_font
-    ws.cell(row=1, column=11).border = thin_border
+    ws.cell(row=1, column=9, value="Market Cap").fill = label_fill
+    ws.cell(row=1, column=9).font = label_font
+    ws.cell(row=1, column=9).border = thin_border
 
     # Write and format data cells
+    rc_cell = ws.cell(row=2, column=3, value=reported_currency)
+    rc_cell.fill = data_fill
+    rc_cell.font = label_font
+    rc_cell.border = thin_border
+
     fiscal_year_end = cd_info.get("fiscal_year_end")
     fy_cell = ws.cell(row=2, column=5, value=fiscal_year_end)
     fy_cell.fill = data_fill
@@ -173,14 +183,14 @@ def write_company_description(writer, final_output):
     fy_cell.border = thin_border
 
     stock_price = to_float(cd_info.get("stock_price"))
-    sp_cell = ws.cell(row=2, column=8, value=stock_price)
+    sp_cell = ws.cell(row=2, column=7, value=stock_price)
     sp_cell.fill = data_fill
     sp_cell.font = label_font
     sp_cell.number_format = '$#,##0.00'
     sp_cell.border = thin_border
 
     market_cap = to_float(cd_info.get("marketCapitalization")) / 1_000_000
-    mc_cell = ws.cell(row=2, column=11, value=market_cap)
+    mc_cell = ws.cell(row=2, column=9, value=market_cap)
     mc_cell.fill = data_fill
     mc_cell.font = label_font
     mc_cell.number_format = '$#,##0'
@@ -351,6 +361,7 @@ def write_company_description(writer, final_output):
             data_cell.number_format = number_formats[metric]
 
 def write_analyses_sheet(writer, final_output):
+    reported_currency = final_output["summary"]["reported_currency"]
     analyses = final_output["analyses"]
     inv_char = analyses["investment_characteristics"]
     data = analyses["data"]
@@ -362,7 +373,7 @@ def write_analyses_sheet(writer, final_output):
     ws.freeze_panes = "B1"
 
     # Write and format the "Investment Characteristics" title
-    ic_cell = ws.cell(row=1, column=6, value="Investment Characteristics")
+    ic_cell = ws.cell(row=1, column=6, value="Investment Characteristics (in mlns "+reported_currency + ")")
     ic_cell.fill = label_fill
     ic_cell.font = title_font
     apply_table_border(ws, 1, 5, 9)
@@ -551,6 +562,7 @@ def write_analyses_sheet(writer, final_output):
             cell.number_format = number_formats[metric]
 
 def write_profit_desc_sheet(writer, final_output):
+    reported_currency = final_output["summary"]["reported_currency"]
     pd_info = final_output["profit_description"]
     pchar = pd_info["profit_description_characteristics"]
     pdata = pd_info["data"]
@@ -563,7 +575,7 @@ def write_profit_desc_sheet(writer, final_output):
     ws.freeze_panes = "D1"
 
     # Write and format the title
-    title_cell = ws.cell(row=1, column=4, value="Description & Analysis of Profitability (in mlns)")
+    title_cell = ws.cell(row=1, column=4, value=f"Description & Analysis of Profitability (in mlns {reported_currency})")
     title_cell.fill = label_fill
     title_cell.font = title_font
     title_fill_range(ws, 1, 3, 10)
@@ -839,6 +851,7 @@ def write_profit_desc_sheet(writer, final_output):
                     percent_cell.font = Font(name="Arial", italic=True, size=8)
 
 def write_balance_sheet_sheet(writer, final_output):
+    reported_currency = final_output["summary"]["reported_currency"]
     bs_info = final_output["balance_sheet"]
     bs_char = bs_info["balance_sheet_characteristics"]
     bs_data = bs_info["data"]
@@ -849,7 +862,7 @@ def write_balance_sheet_sheet(writer, final_output):
     ws = wb["Balance Sht."]
     ws.freeze_panes = "F1"
     # Write and format the title
-    title_cell = ws.cell(row=1, column=4, value="Balance Sheet (in millions):")
+    title_cell = ws.cell(row=1, column=4, value=f"Balance Sheet (in mlns {reported_currency}):")
     title_cell.fill = label_fill
     title_cell.font = title_font
     title_fill_range(ws, 1, 4,7)
@@ -947,6 +960,7 @@ def write_balance_sheet_sheet(writer, final_output):
         current_row += 1
 
 def write_studies_sheet(writer, final_output):
+    reported_currency = final_output["summary"]["reported_currency"]
     studies = final_output.get("studies", {})
     analysis = studies.get("analysis_of_debt_levels", {})
 
@@ -961,7 +975,7 @@ def write_studies_sheet(writer, final_output):
     ws = wb["Studies"]
 
     # Write and format the title
-    title_cell = ws.cell(row=1, column=4, value="Description & Analysis of Debt Levels (in mlns):")
+    title_cell = ws.cell(row=1, column=4, value=f"Description & Analysis of Debt Levels (in mlns {reported_currency}):")
     title_cell.font = title_font
     apply_table_border(ws, 1 ,3, 10)
     title_fill_range(ws, 1, 3,10)
@@ -1250,14 +1264,14 @@ def write_industry_sheet(writer, final_output):
     ws = wb["Industry"]
 
     industry_data = final_output["industry"]
-
+    industry_name = final_output["summary"]["industry"]
     # Write and format the "Industry Overview" title
-    title_cell = ws.cell(row=1, column=6, value="Industry Overview")
+    title_cell = ws.cell(row=1, column=6, value=f"Industry Comparison: {industry_name}")
     title_cell.fill = label_fill
     title_cell.font = title_font
     title_cell.alignment = center_alignment
-    apply_table_border(ws, 1, 5, 7)
-    title_fill_range(ws, 1, 5, 7)
+    apply_table_border(ws, 1, 4, 8)
+    title_fill_range(ws, 1, 4, 8)
 
     # Write Operating Statistics section
     op_stats_cell = ws.cell(row=3, column=2, value="Operating Statistics:")
