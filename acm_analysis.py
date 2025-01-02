@@ -956,6 +956,7 @@ def transform_final_output(final_output: dict, stock_price: float = None):
             "sector": final_output.get("sector"),
             "industry": final_output.get("industry"),
             "reported_currency": final_output.get("reported_currency"),
+            "isAdr": final_output.get("isAdr")
         },
         "company_description": {
             "fiscal_year_end": fiscal_year_end,
@@ -1212,7 +1213,8 @@ if __name__ == "__main__":
         "profit_description_characteristics": profit_description_characteristics,
         "data": yoy_data,
         "qualities": "",
-        "industry_comparison": industry_data
+        "industry_comparison": industry_data,
+        "isAdr": profile.get("isAdr", False)
     }
 
     # Process qualities

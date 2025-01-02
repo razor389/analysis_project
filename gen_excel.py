@@ -24,7 +24,7 @@ data_arial_bold_font = Font(name ="Arial", size=10, bold=True)
 data_arial_italic_font = Font(name = "Arial", size=10, italic=True)
 
 center_alignment = Alignment(horizontal="center", vertical="center")
-
+right_alignment = Alignment(horizontal="right", vertical="center")
 # Define a thin black border
 thin_border = Border(
     left=Side(style='thin', color='000000'),
@@ -144,6 +144,7 @@ def write_summary_sheet(writer, final_output):
 
 def write_company_description(writer, final_output):
     reported_currency = final_output["summary"]["reported_currency"]
+    is_adr = final_output["summary"]["isAdr"]
     cd_info = final_output["company_description"]
     cd_data = cd_info["data"]
     wb = writer.book
@@ -315,7 +316,11 @@ def write_company_description(writer, final_output):
                     formula = f"=(({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2)/{col_letter}{metric_positions['diluted_eps']}"
                     data_cell = ws.cell(row=metric_row, column=col, value=formula)
                 
-                elif metric == "dividends_per_share":
+                elif is_adr and metric == "dividends_paid":
+                    formula = f"={col_letter}{metric_positions['dividends_per_share']}*{col_letter}{metric_positions['shares_outstanding']}"
+                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
+
+                elif not is_adr and metric == "dividends_per_share":
                     formula = f"={col_letter}{metric_positions['dividends_paid']}/{col_letter}{metric_positions['shares_outstanding']}"
                     data_cell = ws.cell(row=metric_row, column=col, value=formula)
                 
@@ -347,6 +352,7 @@ def write_company_description(writer, final_output):
                     data_cell = ws.cell(row=metric_row, column=col, value=value)
 
                 data_cell.font = data_tnr_italic_font
+                data_cell.alignment = right_alignment
             
             else:
                 value = cd_data.get(year, {}).get(metric)
