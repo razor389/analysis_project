@@ -150,6 +150,7 @@ def write_company_description(writer, final_output):
     if "Co. Desc" not in wb.sheetnames:
         wb.create_sheet("Co. Desc")
     ws = wb["Co. Desc"]
+    ws.freeze_panes = "B1"
 
     # Write and format labels
     ws.cell(row=1, column=5, value="FY End").fill = label_fill
@@ -358,6 +359,7 @@ def write_analyses_sheet(writer, final_output):
     if "Analyses" not in wb.sheetnames:
         wb.create_sheet("Analyses")
     ws = wb["Analyses"]
+    ws.freeze_panes = "B1"
 
     # Write and format the "Investment Characteristics" title
     ic_cell = ws.cell(row=1, column=6, value="Investment Characteristics")
@@ -558,6 +560,7 @@ def write_profit_desc_sheet(writer, final_output):
     if "Profit.Desc." not in wb.sheetnames:
         wb.create_sheet("Profit.Desc.")
     ws = wb["Profit.Desc."]
+    ws.freeze_panes = "D1"
 
     # Write and format the title
     title_cell = ws.cell(row=1, column=4, value="Description & Analysis of Profitability (in mlns)")
@@ -844,7 +847,7 @@ def write_balance_sheet_sheet(writer, final_output):
     if "Balance Sht." not in wb.sheetnames:
         wb.create_sheet("Balance Sht.")
     ws = wb["Balance Sht."]
-
+    ws.freeze_panes = "F1"
     # Write and format the title
     title_cell = ws.cell(row=1, column=4, value="Balance Sheet (in millions):")
     title_cell.fill = label_fill
