@@ -144,7 +144,6 @@ def write_summary_sheet(writer, final_output):
 
 def write_company_description(writer, final_output):
     reported_currency = final_output["summary"]["reported_currency"]
-    is_adr = final_output["summary"]["isAdr"]
     cd_info = final_output["company_description"]
     cd_data = cd_info["data"]
     wb = writer.book
@@ -316,11 +315,7 @@ def write_company_description(writer, final_output):
                     formula = f"=(({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2)/{col_letter}{metric_positions['diluted_eps']}"
                     data_cell = ws.cell(row=metric_row, column=col, value=formula)
                 
-                elif is_adr and metric == "dividends_paid":
-                    formula = f"={col_letter}{metric_positions['dividends_per_share']}*{col_letter}{metric_positions['shares_outstanding']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-
-                elif not is_adr and metric == "dividends_per_share":
+                elif metric == "dividends_per_share":
                     formula = f"={col_letter}{metric_positions['dividends_paid']}/{col_letter}{metric_positions['shares_outstanding']}"
                     data_cell = ws.cell(row=metric_row, column=col, value=formula)
                 
