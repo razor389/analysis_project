@@ -1386,6 +1386,172 @@ def write_industry_sheet(writer, final_output):
     for col in range(1, 11):
         ws.column_dimensions[get_column_letter(col)].width = 15
 
+def write_hist_pricing_sheet(writer, final_output):
+    """
+    Write the Historical Pricing sheet with average ratios and price implications in a 2x2 grid layout
+    
+    Parameters:
+    writer: ExcelWriter object
+    final_output: Dictionary containing the full output data including historical pricing and current metrics
+    """
+    wb = writer.book
+    
+    if "Hist. Pricing" not in wb.sheetnames:
+        wb.create_sheet("Hist. Pricing")
+    ws = wb["Hist. Pricing"]
+
+    hist_pricing = final_output.get("historical_pricing", {})
+    current_metrics = final_output.get("current_metrics", {})
+    
+    # Write and format the title
+    title_cell = ws.cell(row=1, column=4, value="Historical Pricing Analysis")
+    title_cell.fill = label_fill
+    title_cell.font = title_font
+    title_cell.alignment = center_alignment
+    apply_table_border(ws, 1, 3, 6)
+    title_fill_range(ws, 1, 3, 6)
+
+    # Get the first new year column letter from Co. Desc sheet for formulas
+    sorted_years = sorted(final_output["company_description"]["data"].keys(), key=lambda x: int(x))
+    if sorted_years:
+        max_year = max(int(year) for year in sorted_years)
+        new_year = str(max_year + 1)
+        # In Co. Desc sheet, years start at column B (2)
+        first_new_year_col = get_column_letter(2 + len(sorted_years))
+    else:
+        first_new_year_col = "B"  # fallback
+
+    # Define the grid positions for each metric
+    metrics = {
+        # Top Left - P/E Ratio
+        "P/E Ratio": {
+            "low_key": "avg_pe_low",
+            "high_key": "avg_pe_high",
+            "current_formula": f"='Co. Desc'!{first_new_year_col}5",  # References diluted EPS
+            "start_row": 3,
+            "start_col": 2,
+            "format": '#,##0.0',
+            "value_type": "earnings"
+        },
+        # Top Right - P/S Ratio
+        "P/S Ratio": {
+            "low_key": "avg_ps_low",
+            "high_key": "avg_ps_high",
+            "current_formula": f"='Analyses'!{first_new_year_col}11",  # References Sales/Share
+            "start_row": 3,
+            "start_col": 8,
+            "format": '#,##0.00',
+            "value_type": "sales"
+        },
+        # Bottom Left - P/B Ratio
+        "P/B Ratio": {
+            "low_key": "avg_pb_low",
+            "high_key": "avg_pb_high",
+            "current_formula": f"='Co. Desc'!{first_new_year_col}20",  # References Book Value/Share
+            "start_row": 10,
+            "start_col": 2,
+            "format": '#,##0.00',
+            "value_type": "book_value"
+        },
+        # Bottom Right - P/CF Ratio
+        "P/CF Ratio": {
+            "low_key": "avg_pcf_low",
+            "high_key": "avg_pcf_high",
+            "current_formula": f"=('Co. Desc'!{first_new_year_col}4+'Analyses'!{first_new_year_col}22)/'Co. Desc'!{first_new_year_col}16",  # (Net Profit + Depreciation) / Shares Outstanding
+            "start_row": 10,
+            "start_col": 8,
+            "format": '#,##0.00',
+            "value_type": "cash_flow"
+        }
+    }
+
+    # Write each metric box
+    for metric, props in metrics.items():
+        start_row = props["start_row"]
+        start_col = props["start_col"]
+        
+        # Write box title
+        title_cell = ws.cell(row=start_row, column=start_col, value=metric)
+        title_cell.fill = label_fill
+        title_cell.font = label_font
+        title_cell.alignment = center_alignment
+        ws.merge_cells(start_row=start_row, start_column=start_col, 
+                      end_row=start_row, end_column=start_col + 1)
+        
+        # Write metric rows vertically
+        metrics_data = [
+            ("Used", props["current_formula"]),  # Now using formula instead of value
+            ("Avg Low", hist_pricing.get(props["low_key"])),
+            ("Avg High", hist_pricing.get(props["high_key"]))
+        ]
+        
+        for idx, (label, value) in enumerate(metrics_data):
+            # Write label
+            label_cell = ws.cell(row=start_row + 1 + idx, column=start_col, value=label)
+            label_cell.fill = label_fill
+            label_cell.font = label_font
+            label_cell.border = thin_border
+            label_cell.alignment = center_alignment
+            
+            # Write value or formula
+            if idx == 0:  # "Used" row
+                value_cell = ws.cell(row=start_row + 1 + idx, column=start_col + 1)
+                value_cell.value = value  # This is now a formula
+            else:
+                value_cell = ws.cell(row=start_row + 1 + idx, column=start_col + 1, value=value)
+            
+            value_cell.fill = data_fill
+            value_cell.font = data_arial_font
+            value_cell.border = thin_border
+            value_cell.number_format = props["format"]
+            value_cell.alignment = right_alignment
+        
+        # Write Buy and Sell rows with formulas
+        used_cell = f"{get_column_letter(start_col + 1)}{start_row + 1}"
+        avg_low_cell = f"{get_column_letter(start_col + 1)}{start_row + 2}"
+        avg_high_cell = f"{get_column_letter(start_col + 1)}{start_row + 3}"
+        
+        # Write Buy row (Used * Avg Low)
+        buy_label = ws.cell(row=start_row + 4, column=start_col, value="Buy")
+        buy_label.fill = label_fill
+        buy_label.font = label_font
+        buy_label.border = thin_border
+        buy_label.alignment = center_alignment
+        
+        buy_cell = ws.cell(row=start_row + 4, column=start_col + 1, 
+                          value=f"={used_cell}*{avg_low_cell}")
+        buy_cell.fill = data_fill
+        buy_cell.font = data_arial_font
+        buy_cell.border = thin_border
+        buy_cell.number_format = '#,##0.00'
+        buy_cell.alignment = right_alignment
+        
+        # Write Sell row (Used * Avg High)
+        sell_label = ws.cell(row=start_row + 5, column=start_col, value="Sell")
+        sell_label.fill = label_fill
+        sell_label.font = label_font
+        sell_label.border = thin_border
+        sell_label.alignment = center_alignment
+        
+        sell_cell = ws.cell(row=start_row + 5, column=start_col + 1, 
+                           value=f"={used_cell}*{avg_high_cell}")
+        sell_cell.fill = data_fill
+        sell_cell.font = data_arial_font
+        sell_cell.border = thin_border
+        sell_cell.number_format = '#,##0.00'
+        sell_cell.alignment = right_alignment
+        
+        # Add border around the entire box
+        for row in range(start_row, start_row + 6):
+            for col in range(start_col, start_col + 2):
+                cell = ws.cell(row=row, column=col)
+                cell.border = thin_border
+
+    # Adjust column widths
+    for base_col in [2, 8]:  # Starting columns for left and right sections
+        ws.column_dimensions[get_column_letter(base_col)].width = 12      # Labels
+        ws.column_dimensions[get_column_letter(base_col + 1)].width = 20  # Values
+
 def generate_excel_for_ticker_year(ticker: str, year: int):
     """
     Generate the Excel file for the given ticker and year, writing to:
@@ -1414,6 +1580,7 @@ def generate_excel_for_ticker_year(ticker: str, year: int):
     write_studies_sheet(writer, final_output)
     write_qualities_sheet(writer, final_output)
     write_industry_sheet(writer, final_output)
+    write_hist_pricing_sheet(writer, final_output)
 
     # 4. Apply workbook formatting (remove gridlines, etc.)
     format_workbook(writer)
@@ -1446,6 +1613,7 @@ if __name__ == "__main__":
     write_studies_sheet(writer, final_output)
     write_qualities_sheet(writer, final_output)
     write_industry_sheet(writer, final_output)
+    write_hist_pricing_sheet(writer, final_output)
 
     # Apply formatting: set font to Arial size 10 for non-formatted cells and remove gridlines
     format_workbook(writer)
