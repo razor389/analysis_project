@@ -1401,10 +1401,10 @@ def write_hist_pricing_sheet(writer, final_output):
     ws = wb["Hist. Pricing"]
 
     hist_pricing = final_output.get("historical_pricing", {})
-    current_metrics = final_output.get("current_metrics", {})
-    
+    reported_currency = final_output["summary"]["reported_currency"]
+
     # Write and format the title
-    title_cell = ws.cell(row=1, column=4, value="Historical Pricing Analysis")
+    title_cell = ws.cell(row=1, column=4, value=f"Historical Pricing Analysis ({reported_currency})")
     title_cell.fill = label_fill
     title_cell.font = title_font
     title_cell.alignment = center_alignment
@@ -1521,9 +1521,9 @@ def write_hist_pricing_sheet(writer, final_output):
         buy_cell = ws.cell(row=start_row + 4, column=start_col + 1, 
                           value=f"={used_cell}*{avg_low_cell}")
         buy_cell.fill = data_fill
-        buy_cell.font = data_arial_font
+        buy_cell.font = data_arial_bold_font
         buy_cell.border = thin_border
-        buy_cell.number_format = '#,##0.00'
+        buy_cell.number_format = '$#,##0.00'
         buy_cell.alignment = right_alignment
         
         # Write Sell row (Used * Avg High)
@@ -1536,9 +1536,9 @@ def write_hist_pricing_sheet(writer, final_output):
         sell_cell = ws.cell(row=start_row + 5, column=start_col + 1, 
                            value=f"={used_cell}*{avg_high_cell}")
         sell_cell.fill = data_fill
-        sell_cell.font = data_arial_font
+        sell_cell.font = data_arial_bold_font
         sell_cell.border = thin_border
-        sell_cell.number_format = '#,##0.00'
+        sell_cell.number_format = '$#,##0.00'
         sell_cell.alignment = right_alignment
         
         # Add border around the entire box
