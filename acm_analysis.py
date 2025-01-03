@@ -368,6 +368,24 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict, profi
         # Depreciation % = depreciation / net_profit
         depreciation_percent = (depreciation / net_profit) if (depreciation and net_profit and net_profit != 0) else None
 
+        # p/e low high
+        pe_low = yearly_low / diluted_eps if diluted_eps !=0 else None
+        pe_high = yearly_high / diluted_eps if diluted_eps != 0  else None
+
+        # p/b low high
+        pb_low = yearly_low / book_value_per_share if book_value_per_share != 0 else None
+        pb_high = yearly_high / book_value_per_share if book_value_per_share != 0 else None
+
+        # p/s low high
+        ps_low = yearly_low / sales_per_share if sales_per_share !=0 else None
+        ps_high = yearly_high / sales_per_share if sales_per_share != 0 else None
+
+        # pcf low high
+        addback_dep_earnings_ps = (net_profit + depreciation) / shares_outstanding if shares_outstanding != 0 else None
+
+        pcfs_low = yearly_low / addback_dep_earnings_ps if addback_dep_earnings_ps != 0 else None
+        pcfs_high = yearly_high / addback_dep_earnings_ps if addback_dep_earnings_ps != 0 else None
+
         # Prepare the three sections
         company_description = {
             "net_profit": net_profit,
@@ -475,13 +493,25 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict, profi
             }
         }
 
+        hist_pricing = {
+            "pe_low": pe_low,
+            "pe_high": pe_high,
+            "pb_low": pb_low,
+            "pb_high": pb_high,
+            "ps_low": ps_low,
+            "ps_high": ps_high,
+            "pcf_low": pcfs_low,
+            "pcf_high": pcfs_high
+        }
+
         # Populate the results dictionary with the four sections
         results[year] = {
             "year": year,
             "company_description": company_description,
             "analyses": analysis,
             "profit_description": profit_description,
-            "balance_sheet": balance_sheet
+            "balance_sheet": balance_sheet,
+            "hist_pricing": hist_pricing
         }
 
         prev_shares_outstanding = shares_outstanding
@@ -845,6 +875,36 @@ def compute_profit_description_characteristics(yoy_data: dict):
 
     return results
 
+def compute_historical_pricing_averages(yoy_data):
+    """
+    Compute average historical pricing metrics across all years.
+    """
+    metrics = ['pe_low', 'pe_high', 'pb_low', 'pb_high', 'ps_low', 'ps_high', 
+              'pcf_low', 'pcf_high']
+    
+    # Initialize sums and counts for each metric
+    sums = {metric: 0 for metric in metrics}
+    counts = {metric: 0 for metric in metrics}
+    
+    # Accumulate values
+    for year_data in yoy_data.values():
+        hist_vals = year_data.get('hist_pricing', {})
+        for metric in metrics:
+            value = hist_vals.get(metric)
+            if value is not None and isinstance(value, (int, float)):
+                sums[metric] += value
+                counts[metric] += 1
+    
+    # Calculate averages
+    averages = {}
+    for metric in metrics:
+        if counts[metric] > 0:
+            averages[f'avg_{metric}'] = sums[metric] / counts[metric]
+        else:
+            averages[f'avg_{metric}'] = None
+            
+    return averages
+
 def transform_final_output(final_output: dict, stock_price: float = None):
     yoy_data = final_output.get("data", {})
     sorted_years = sorted(yoy_data.keys())
@@ -946,6 +1006,8 @@ def transform_final_output(final_output: dict, stock_price: float = None):
                 }
             }
         }
+    
+    historical_pricing_averages = compute_historical_pricing_averages(yoy_data)
 
     rearranged = {
         "summary": {
@@ -977,6 +1039,7 @@ def transform_final_output(final_output: dict, stock_price: float = None):
             "data": balance_sheet_data
         },
         "studies": studies,
+        "historical_pricing": historical_pricing_averages,
         "industry": final_output.get("industry_comparison", {})
     }
 
