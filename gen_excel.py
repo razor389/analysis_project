@@ -9,6 +9,8 @@ from datetime import datetime
 import textwrap
 import re
 
+from utils import get_current_quote_yahoo
+
 # Define Custom Fills
 label_fill = PatternFill(start_color="00FFFF", end_color="00FFFF", fill_type="solid")  # Light blue
 data_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")   # Cornsilk
@@ -1552,6 +1554,171 @@ def write_hist_pricing_sheet(writer, final_output):
         ws.column_dimensions[get_column_letter(base_col)].width = 12      # Labels
         ws.column_dimensions[get_column_letter(base_col + 1)].width = 20  # Values
 
+def write_valuation_sheet(writer, final_output, ticker):
+    """Write the valuation analysis sheet with 2x2 grid layout"""
+    reported_currency = final_output["summary"]["reported_currency"]
+    wb = writer.book
+    
+    if "Valuation" not in wb.sheetnames:
+        wb.create_sheet("Valuation")
+    ws = wb["Valuation"]
+
+    # Title
+    title_cell = ws.cell(row=1, column=4, value="Valuation (USD)")
+    title_cell.fill = label_fill
+    title_cell.font = title_font
+    title_fill_range(ws, 1, 3, 6)
+    apply_table_border(ws, 1, 3, 6)
+
+    current_price = get_current_quote_yahoo(ticker)
+
+    # Get forecast year column reference
+    sorted_years = sorted(final_output["company_description"]["data"].keys(), key=lambda x: int(x))
+    first_forecast_col = get_column_letter(2 + len(sorted_years)) if sorted_years else "B"
+
+    # Initial settings section (rows 3-6)
+    settings = {
+        (3, 2): ("ADR Multiple:", 1),
+        (3, 4): (f"USD:{reported_currency} rate:", 1),
+        (4, 2): ("Purchase Discount:", 0.14),
+        (4, 4): ("Sell Discount:", 0.05),
+        (5, 2): ("PE Multiple:", 25),
+        (5, 4): ("EPS growth rate:", 0.10),
+        (6, 2): ("Dividend growth rate:", 0.10)
+    }
+
+    for (row, col), (label, value) in settings.items():
+        label_cell = ws.cell(row=row, column=col-1, value=label)
+        label_cell.fill = label_fill
+        label_cell.font = label_font
+        label_cell.border = thin_border
+        
+        value_cell = ws.cell(row=row, column=col, value=value)
+        value_cell.fill = data_fill
+        value_cell.font = data_arial_font
+        value_cell.border = thin_border
+        if isinstance(value, float) and value < 1:
+            value_cell.number_format = '0.00%'
+    
+    pe_multiple_val = ws.cell(row=5, column=2).value 
+
+    # 2x2 Grid Layout
+    grid_segments = {
+        # Top Left
+        "Initial Rate of Investment:": {
+            "start_row": 8,
+            "start_col": 2,
+            "metrics": {
+                "Current Price:": f"={current_price}",
+                "Current EPS:": f"='Co. Desc'!{first_forecast_col}5*D3*B3",
+                "Initial ROI:": "=B10/B9"
+            }
+        },
+        # Top Right
+        "Relative Value to Investment In T-Bonds:": {
+            "start_row": 8,
+            "start_col": 8,
+            "metrics": {
+                "Current EPS:": f"='Co. Desc'!{first_forecast_col}5*D3*B3",
+                "T-Bond Rate:": 0.04,
+                "Relative Value:": "=H9/H10"
+            }
+        },
+        # Bottom Left
+        "Valuation as an Equity Bond:": {
+            "start_row": 15,
+            "start_col": 2,
+            "metrics": {
+                "Current BV:": f"='Co. Desc'!{first_forecast_col}20*B3*D3",
+                "Current ROE:": f"='Co. Desc'!{first_forecast_col}24",
+                "Retained % adjustment:": 0.10,
+                "Retained %:": f"=1-'Analyses'!F5-'Analyses'!F7-B18",
+                "Net BV growth:": "=B17*B19",
+                "BV in year 10:": "=FV(B20,10,,-B16)",
+                "EPS Adjustment Factor:": 1.5,
+                "EPS in Year 10:": "=B17*B21*B22",
+                "Value at PE Multiple:": "=B5*B23",
+                "Total Dividends:": f"=(('Co. Desc'!{first_forecast_col}13+FV(B6,10,,-'Co. Desc'!{first_forecast_col}13))/2)*10*B3*D3",
+                "Total Future Value:": "=B24+B25",
+                "Purchase at Discount:": "=PV(B4,10,,B26)*-1"
+            }
+        },
+        # Bottom Right
+        "Valuation on Earnings Growth:": {
+            "start_row": 15,
+            "start_col": 8,
+            "metrics": {
+                "Current EPS:": f"='Co. Desc'!{first_forecast_col}5*D3*B3",
+                "EPS in year 10:": "=FV(D5,10,,-H16)",
+                "Avg PE Ratio:": f"=AVERAGE('Co. Desc'!B8:{first_forecast_col}8)",
+                "Value at PE Multiple:": "=B5*H18+B25",
+                "Price Return:": "=RATE(10,,B9,-H19+B25)",
+                "Dividend Return:": f"='Co. Desc'!{first_forecast_col}14",
+                "Total Return:": "=H20+H21",
+                "Purchase at Discount:": "=PV(B4,10,,-H19)",
+                "Sell at Discount:": "=PV(D4,10,,-H19)"
+            }
+        }
+    }
+
+    # Write grid segments
+    for title, config in grid_segments.items():
+        start_row = config["start_row"]
+        start_col = config["start_col"]
+        
+        # Write segment title
+        title_cell = ws.cell(row=start_row, column=start_col-1, value=title)
+        title_cell.fill = label_fill
+        title_cell.font = Font(name="Times New Roman", size=12, bold=True, italic=True)
+        title_cell.border = thin_border
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+        # Merge the two columns for the label
+        ws.merge_cells(
+            start_row=start_row, start_column=start_col-1, 
+            end_row=start_row, end_column=start_col
+        )
+        
+        # Write metrics
+        current_row = start_row + 1
+        for label, formula in config["metrics"].items():
+            # Label
+            label_cell = ws.cell(row=current_row, column=start_col-1, value=label)
+            label_cell.fill = label_fill
+            label_cell.font = label_font
+            label_cell.border = thin_border
+            
+            # Value/Formula
+            value_cell = ws.cell(row=current_row, column=start_col, value=formula)
+            value_cell.fill = data_fill
+            value_cell.font = data_arial_font
+            value_cell.border = thin_border
+
+            if label.lower() in ["relative value:", "purchase at discount:", "sell at discount:"]:
+                value_cell.font = data_arial_bold_font
+            
+            label_lower = label.lower()
+            if label_lower == "t-bond rate:":
+                value_cell.number_format = '0.00%'  # requested
+            elif label_lower == "eps adjustment factor:":
+                # two decimal float
+                value_cell.number_format = '0.00'
+            elif label_lower == "avg pe ratio:":
+                value_cell.number_format = '0.00'
+            elif "net bv growth" in label_lower:
+                value_cell.number_format = '0.00%'
+            elif any(x in label_lower for x in ["rate", "roi", "return", "roe", "%"]):
+                value_cell.number_format = '0.00%'
+            elif any(x in label_lower for x in ["price", "value", "eps", "bv", "dividends", "purchase", "sell"]):
+                value_cell.number_format = '"$"#,##0.00'
+            
+            current_row += 1
+
+    # Set column widths
+    for col in [1, 7]:   # Label columns
+        ws.column_dimensions[get_column_letter(col)].width = 25
+    for col in [2, 8]:   # Value columns
+        ws.column_dimensions[get_column_letter(col)].width = 15
+
 def generate_excel_for_ticker_year(ticker: str, year: int):
     """
     Generate the Excel file for the given ticker and year, writing to:
@@ -1581,6 +1748,7 @@ def generate_excel_for_ticker_year(ticker: str, year: int):
     write_qualities_sheet(writer, final_output)
     write_industry_sheet(writer, final_output)
     write_hist_pricing_sheet(writer, final_output)
+    write_valuation_sheet(writer, final_output, ticker)
 
     # 4. Apply workbook formatting (remove gridlines, etc.)
     format_workbook(writer)
@@ -1614,6 +1782,7 @@ if __name__ == "__main__":
     write_qualities_sheet(writer, final_output)
     write_industry_sheet(writer, final_output)
     write_hist_pricing_sheet(writer, final_output)
+    write_valuation_sheet(writer, final_output, ticker)
 
     # Apply formatting: set font to Arial size 10 for non-formatted cells and remove gridlines
     format_workbook(writer)
