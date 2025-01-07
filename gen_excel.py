@@ -1567,8 +1567,8 @@ def write_valuation_sheet(writer, final_output, ticker):
     title_cell = ws.cell(row=1, column=4, value="Valuation (USD)")
     title_cell.fill = label_fill
     title_cell.font = title_font
-    title_fill_range(ws, 1, 3, 6)
-    apply_table_border(ws, 1, 3, 6)
+    title_fill_range(ws, 1, 3, 5)
+    apply_table_border(ws, 1, 3, 5)
 
     current_price = get_current_quote_yahoo(ticker)
 
@@ -1617,6 +1617,26 @@ def write_valuation_sheet(writer, final_output, ticker):
         # Format anything < 1 as percentage
         if isinstance(value, float) and value < 1:
             value_cell.number_format = '0.00%'
+    
+    new_settings = {
+        (3, 7): ("Buy %:", 0.60),    # G3 (label), H3 (value = 60%)
+        (4, 7): ("Sell %:", 1.20),   # G4 (label), H4 (value = 120%)
+    }
+
+    for (row, col), (label, value) in new_settings.items():
+        label_cell = ws.cell(row=row, column=col, value=label)
+        label_cell.fill = label_fill
+        label_cell.font = label_font
+        label_cell.border = thin_border
+        
+        value_cell = ws.cell(row=row, column=col + 1, value=value)
+        value_cell.fill = data_fill
+        value_cell.font = data_arial_font
+        value_cell.border = thin_border
+        value_cell.alignment = center_alignment
+
+        # Format them as percentages
+        value_cell.number_format = '0.00%'
 
     # If you need the numeric value of PE multiple in code:
     # pe_multiple_val = ws.cell(row=5, column=6).value  # F5
@@ -1711,6 +1731,56 @@ def write_valuation_sheet(writer, final_output, ticker):
                 "Sell at Discount:": "=PV(F4, 10, , -E19)",
             },
         },
+        "Capital Charge Approach:": {
+            "start_row": 8,
+            "start_col": 8,  # G
+            "metrics": {
+                # EBIT = operating margin * sales (most recent year)
+                #   If your Co. Desc sheet has operating margin in row 17 and
+                #   sales in row 12 for the "most recent year," adapt as needed.
+                "EBIT:": f"='Analyses'!{first_forecast_col}20 * 'Analyses'!{first_forecast_col}10",
+                
+                # Required return (cost of capital) => default 12%
+                "Required Return:": 0.12,
+                
+                # Growth rate => reference the EPS growth rate in D3 if you like
+                "Growth Rate:": "=D3",
+                
+                # % not required => default 80%
+                "% Not Required:": 0.80,
+                
+                # Denominator = required return - (% not required * growth rate)
+                #   Will reference the corresponding cells once placed:
+                #   If "Required Return:" goes in H10,
+                #   and "Growth Rate:" in H11,
+                #   and "% Not Required:" in H12,
+                #   then Denominator = H10 - (H11 * H12).
+                "Denominator:": "=H10 - (H11 * H12)",
+                
+                # EV = EBIT / Denominator  (EBIT in H8, Denominator in H12)
+                #   NOTE: watch the row offsets as you fill out the items below!
+                "EV:": "=H9 / H13",
+                
+                # Debt => from 'Studies'!D39 (Long-term debt)
+                "Debt:": "='Studies'!D39",
+                
+                # Equity Value = EV - Debt
+                "Equity Value:": "=H14 - H15",
+                
+                # Shares Outstanding => from co desc, row ? 
+                #   If your co desc has shares in row 2 for that "year," adapt as needed.
+                "Shares Outstanding:": f"='Co. Desc'!{first_forecast_col}16",
+                
+                # Share Value = Equity Value / Shares Outstanding
+                "Share Value:": "=H16 / H17",
+                
+                # Buy at => Share Value * Buy % (which is in H1)
+                "Buy At:": "=H18 * $H$3",
+                
+                # Sell at => Share Value * Sell % (which is in H2)
+                "Sell At:": "=H18 * $H$4",
+            },
+        }
     }
 
     #
@@ -1749,7 +1819,7 @@ def write_valuation_sheet(writer, final_output, ticker):
             value_cell.alignment = center_alignment
 
             # Make certain items bold
-            if label.lower() in ["relative value:", "purchase at discount:", "sell at discount:"]:
+            if label.lower() in ["relative value:", "purchase at discount:", "sell at discount:", "buy at:", "sell at:"]:
                 value_cell.font = data_arial_bold_font
             
             # Format numeric cells
@@ -1762,9 +1832,12 @@ def write_valuation_sheet(writer, final_output, ticker):
                 value_cell.number_format = '0.00'
             elif "net bv growth" in label_lower:
                 value_cell.number_format = '0.00%'
+            elif "shares outstanding" in label_lower:
+                value_cell.number_format = '#,##0'
             elif any(x in label_lower for x in ["rate", "roi", "return", "roe", "%"]):
                 value_cell.number_format = '0.00%'
-            elif any(x in label_lower for x in ["price", "value", "eps", "bv", "dividends", "purchase", "sell"]):
+            elif any(x in label_lower for x in ["price", "value", "eps", "bv", "dividends", "purchase", "sell",
+                                                "ebit", "value", "debt", "share", "buy at", "sell at"]):
                 value_cell.number_format = '"$"#,##0.00'
             
             current_row += 1
@@ -1776,9 +1849,11 @@ def write_valuation_sheet(writer, final_output, ticker):
     ws.column_dimensions[get_column_letter(1)].width = 25  # A
     ws.column_dimensions[get_column_letter(2)].width = 15  # B
     ws.column_dimensions[get_column_letter(3)].width = 25  # C
-    ws.column_dimensions[get_column_letter(4)].width = 15  # D
+    ws.column_dimensions[get_column_letter(4)].width = 20  # D
     ws.column_dimensions[get_column_letter(5)].width = 25  # E
     ws.column_dimensions[get_column_letter(6)].width = 15  # F
+    ws.column_dimensions[get_column_letter(7)].width = 25  # G
+    ws.column_dimensions[get_column_letter(8)].width = 15  # H
 
 def generate_excel_for_ticker_year(ticker: str, year: int):
     """
