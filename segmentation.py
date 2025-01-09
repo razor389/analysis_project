@@ -8,13 +8,22 @@ import math
 import requests
 from bs4 import BeautifulSoup
 import re
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 FMP_API_KEY = os.getenv('FMP_API_KEY')
 
 HEADERS = {
-    "User-Agent": "Custom Research Agent - Contact: example@email.com" 
+    "User-Agent": "Custom Research Agent - Contact: rgranowski@gmail.com" 
 }
 
 def get_financial_statement(symbol: str, year: int) -> dict:
@@ -46,7 +55,7 @@ def get_financial_statement(symbol: str, year: int) -> dict:
         return target_statement
         
     except Exception as e:
-        print(f"Error fetching financial statement: {e}")
+        logger.error(f"Error fetching financial statement: {e}")
         return None
 
 def get_filing_url(symbol: str, year: int) -> str:
@@ -60,7 +69,7 @@ def get_filing_url(symbol: str, year: int) -> str:
     # Get the final link and transform it to ix?doc format
     final_link = statement.get("finalLink")
     if not final_link:
-        print(f"No filing link found in statement data")
+        logger.error("No filing link found in statement data")
         return None
         
     transformed_url = final_link.replace("/Archives/", "/ix?doc=/Archives/")
@@ -78,7 +87,7 @@ def get_filing_metadata(url):
 
 def get_filing_contents(url):
     """Get the full filing contents using SEC's data endpoints."""
-    print(f"Fetching filing data...")
+    logger.info("Fetching filing data...")
     
     try:
         response = requests.get(url, headers=HEADERS)
@@ -99,7 +108,7 @@ def get_filing_contents(url):
         return filing_response.text, meta_response.json()
         
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching filing: {e}")
+        logger.error(f"Error fetching filing: {e}")
         return None, None
 
 def format_axis_name(axis_name):
@@ -222,7 +231,7 @@ def extract_inline_xbrl_data(url, target_tag):
     if not content:
         return []
     
-    print("\nParsing document...")
+    logger.info("Parsing document...")
     soup = BeautifulSoup(content, 'html.parser')
     
     xbrl_elements = []
@@ -307,8 +316,8 @@ def load_config(ticker: str) -> Dict:
         if ticker not in config:
             raise ValueError(f"No configuration found for ticker {ticker}")
         
-        print(f"\nLoaded configuration for {ticker}:")
-        print(json.dumps(config[ticker], indent=2))
+        logger.info(f"Loaded configuration for {ticker}:")
+        logger.info(json.dumps(config[ticker], indent=2))
         return config[ticker]
     except FileNotFoundError:
         raise FileNotFoundError("segmentation_config.json not found")
@@ -329,13 +338,13 @@ def filter_facts(facts: List[Dict], axes: Optional[Union[List[str], str]], year:
         if fact.get('period', '') and str(year) in fact.get('period', '').split('/')[-1]
     ]
     
-    print(f"\nFiltering by period ending in year {year}:")
-    print(f"Before period filtering: {len(facts)} facts")
-    print(f"After period filtering: {len(period_filtered)} facts")
+    logger.info(f"Filtering by period ending in year {year}:")
+    logger.info(f"Before period filtering: {len(facts)} facts")
+    logger.info(f"After period filtering: {len(period_filtered)} facts")
     
     # Then filter by axes if specified
     if not axes:
-        print(f"No axes specified, returning {len(period_filtered)} facts")
+        logger.info(f"No axes specified, returning {len(period_filtered)} facts")
         return period_filtered
     
     # Convert single axis to list for consistent handling
@@ -353,24 +362,24 @@ def filter_facts(facts: List[Dict], axes: Optional[Union[List[str], str]], year:
         ):
             axis_filtered.append(fact)
     
-    print(f"\nFiltering by axes {axes}:")
-    print(f"Before axis filtering: {len(period_filtered)} facts")
-    print(f"After axis filtering: {len(axis_filtered)} facts")
+    logger.info(f"Filtering by axes {axes}:")
+    logger.info(f"Before axis filtering: {len(period_filtered)} facts")
+    logger.info(f"After axis filtering: {len(axis_filtered)} facts")
     
     if len(axis_filtered) == 0:
-        print("\nAvailable axes in facts:")
+        logger.warning("No facts found after filtering. Available axes:")
         all_axes = set()
         for fact in period_filtered:
             fact_axes = fact.get('axis', '').split('\n')
             all_axes.update(fact_axes)
         for ax in all_axes:
             if ax:  # Only print non-empty axes
-                print(f"- {ax}")
+                logger.info(f"- {ax}")
             
-        print("\nAvailable periods in facts:")
+        logger.info("Available periods:")
         periods = set(fact.get('period') for fact in facts if fact.get('period'))
         for period in sorted(periods):  # Sort periods for clearer output
-            print(f"- {period}")
+            logger.info(f"- {period}")
     
     return axis_filtered
 
@@ -380,18 +389,18 @@ def extract_segment_data(ticker: str, year: int, metric_config: Dict) -> List[Di
     if not tag:
         return []
     
-    print(f"\nProcessing tag: {tag}")
+    logger.info(f"Processing tag: {tag}")
     filing_url = get_filing_url(ticker, year)
     if not filing_url:
         raise ValueError(f"Could not get filing URL for {ticker} {year}")
     
-    print(f"Filing URL: {filing_url}")
+    logger.info(f"Filing URL: {filing_url}")
     facts = extract_inline_xbrl_data(filing_url, tag)
     
-    print(f"\nExtracted {len(facts)} facts for tag {tag}")
+    logger.info(f"Extracted {len(facts)} facts for tag {tag}")
     if facts:
-        print("\nSample fact structure:")
-        print(json.dumps(facts[0], indent=2))
+        logger.debug("Sample fact structure:")
+        logger.debug(json.dumps(facts[0], indent=2))
     
     axes = metric_config.get('axes')  # Now getting 'axes' instead of 'axis'
     return filter_facts(facts, axes, year)
@@ -427,7 +436,7 @@ def process_ticker(ticker: str, year: int) -> Dict:
     
     for metric_name, metric_config in config.items():
         if not metric_config.get('tag'):
-            print(f"No tag configuration found for {metric_name}")
+            logger.warning(f"No tag configuration found for {metric_name}")
             continue
             
         try:
@@ -436,12 +445,12 @@ def process_ticker(ticker: str, year: int) -> Dict:
                 # Deduplicate the facts for this metric
                 deduped_facts = deduplicate_metrics(facts)
                 result["metrics"][metric_name] = deduped_facts
-                print(f"Successfully extracted {len(facts)} facts for {metric_name}")
-                print(f"After deduplication: {len(deduped_facts)} unique facts")
+                logger.info(f"Successfully extracted {len(facts)} facts for {metric_name}")
+                logger.info(f"After deduplication: {len(deduped_facts)} unique facts")
             else:
-                print(f"No data found for {metric_name}")
+                logger.warning(f"No data found for {metric_name}")
         except Exception as e:
-            print(f"Error processing {metric_name} for {ticker}: {e}")
+            logger.error(f"Error processing {metric_name} for {ticker}: {e}")
             result["metrics"][metric_name] = []
     
     return result
@@ -451,31 +460,31 @@ def save_results(result: Dict, ticker: str, year: int):
     filename = f"{ticker}_{year}_breakdown.json"
     with open(filename, 'w') as f:
         json.dump(result, f, indent=2)
-    print(f"\nResults saved to {filename}")
+    logger.info(f"Results saved to {filename}")
 
 def main():
     if len(sys.argv) != 3:
-        print("Usage: python sec_breakdown.py <TICKER> <YEAR>")
+        logger.error("Usage: python sec_breakdown.py <TICKER> <YEAR>")
         sys.exit(1)
     
     # Load environment variables
     load_dotenv()
     if not FMP_API_KEY:
-        print("Error: FMP_API_KEY not found in .env file")
+        logger.error("Error: FMP_API_KEY not found in .env file")
         sys.exit(1)
     
     ticker = sys.argv[1].upper()
     try:
         year = int(sys.argv[2])
     except ValueError:
-        print("Error: Year must be a valid integer")
+        logger.error("Error: Year must be a valid integer")
         sys.exit(1)
     
     try:
         result = process_ticker(ticker, year)
         save_results(result, ticker, year)
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
