@@ -1,0 +1,37 @@
+{
+    "AAPL": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["Product Or Service Axis"]
+        }
+    },
+    "MSFT": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["US-GAAP Statement Business Segments Axis"]
+        },
+        "operating_income": {
+            "tag": "us-gaap:OperatingIncomeLoss",
+            "axes": ["US-GAAP Statement Business Segments Axis"]
+        }
+    },
+    "META": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["US-GAAP Statement Business Segments Axis"]
+        },
+        "operating_income": {
+            "tag": "us-gaap:OperatingIncomeLoss",
+            "axes": ["US-GAAP Statement Business Segments Axis"]
+        }
+    },
+    "AXON": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": [
+                "Statement Business Segments Axis",
+                "Product Or Service Axis"
+            ]
+        }
+    }
+}
