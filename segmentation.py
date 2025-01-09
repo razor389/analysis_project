@@ -1,3 +1,4 @@
+import argparse
 import sys
 import json
 from typing import Dict, List, Optional, Union
@@ -12,8 +13,8 @@ import logging
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO,  # Changed from INFO to WARNING
+    format='%(levelname)s - %(message)s',  # Simplified format
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
@@ -323,8 +324,40 @@ def load_config(ticker: str) -> Dict:
         raise FileNotFoundError("segmentation_config.json not found")
     except json.JSONDecodeError:
         raise ValueError("Invalid JSON in configuration file")
+    
+def process_fact_entry(fact: Dict, debug: bool = False) -> Dict:
+    """
+    Process a single fact entry, converting numeric values to integers
+    and selecting relevant fields based on debug mode.
+    """
+    # Convert fact value to integer
+    try:
+        raw_value = fact['fact'].replace(',', '')
+        numeric_value = int(float(raw_value))
+    except (ValueError, TypeError):
+        # If conversion fails, return None to filter out non-numeric entries
+        logger.warning(f"Failed to convert fact value to integer: {fact.get('fact')}, setting to 0")
+        numeric_value = 0
 
-def filter_facts(facts: List[Dict], axes: Optional[Union[List[str], str]], year: int) -> List[Dict]:
+    # Basic fields to always include
+    processed_fact = {
+        'tag': fact.get('tag'),
+        'fact': numeric_value,
+        'axis': fact.get('axis'),
+        #'member': fact.get('member'),
+        'explicit_member': fact.get('explicit_member')
+    }
+
+    # If in debug mode, include all original fields
+    if debug:
+        processed_fact.update({
+            k: v for k, v in fact.items()
+            if k not in processed_fact  # Don't overwrite already processed fields
+        })
+
+    return processed_fact
+
+def filter_facts(facts: List[Dict], axes: Optional[Union[List[str], str]], year: int, debug: bool = False) -> List[Dict]:
     """
     Filter facts by axes and year, handling different fiscal year end dates.
     Matches facts where the period ends in the specified calendar year.
@@ -332,7 +365,7 @@ def filter_facts(facts: List[Dict], axes: Optional[Union[List[str], str]], year:
     if not facts:
         return []
 
-    # First filter by period - match any period ending in the specified year
+    # First filter by period
     period_filtered = [
         fact for fact in facts 
         if fact.get('period', '') and str(year) in fact.get('period', '').split('/')[-1]
@@ -345,22 +378,24 @@ def filter_facts(facts: List[Dict], axes: Optional[Union[List[str], str]], year:
     # Then filter by axes if specified
     if not axes:
         logger.info(f"No axes specified, returning {len(period_filtered)} facts")
-        return period_filtered
+        processed_facts = [process_fact_entry(fact, debug) for fact in period_filtered]
+        return [f for f in processed_facts if f is not None]  # Filter out None values
     
-    # Convert single axis to list for consistent handling
+    # Convert single axis to list
     if isinstance(axes, str):
         axes = [axes]
     
-    # Filter facts that have all required axes
+    # Filter by axes and process facts
     axis_filtered = []
     for fact in period_filtered:
-        fact_axes = fact.get('axis', '').split('\n')  # Split multiple axes
-        # Check if all required axes are present (case-insensitive)
+        fact_axes = fact.get('axis', '').split('\n')
         if all(
             any(req_axis.lower() in ax.lower() for ax in fact_axes)
             for req_axis in axes
         ):
-            axis_filtered.append(fact)
+            processed_fact = process_fact_entry(fact, debug)
+            if processed_fact:  # Only add if processing succeeded
+                axis_filtered.append(processed_fact)
     
     logger.info(f"Filtering by axes {axes}:")
     logger.info(f"Before axis filtering: {len(period_filtered)} facts")
@@ -373,17 +408,17 @@ def filter_facts(facts: List[Dict], axes: Optional[Union[List[str], str]], year:
             fact_axes = fact.get('axis', '').split('\n')
             all_axes.update(fact_axes)
         for ax in all_axes:
-            if ax:  # Only print non-empty axes
+            if ax:
                 logger.info(f"- {ax}")
             
         logger.info("Available periods:")
         periods = set(fact.get('period') for fact in facts if fact.get('period'))
-        for period in sorted(periods):  # Sort periods for clearer output
+        for period in sorted(periods):
             logger.info(f"- {period}")
     
     return axis_filtered
 
-def extract_segment_data(ticker: str, year: int, metric_config: Dict) -> List[Dict]:
+def extract_segment_data(ticker: str, year: int, metric_config: Dict, debug: bool = False) -> List[Dict]:
     """Extract segment data for a specific metric."""
     tag = metric_config.get('tag')
     if not tag:
@@ -398,36 +433,89 @@ def extract_segment_data(ticker: str, year: int, metric_config: Dict) -> List[Di
     facts = extract_inline_xbrl_data(filing_url, tag)
     
     logger.info(f"Extracted {len(facts)} facts for tag {tag}")
-    if facts:
+    if facts and debug:
         logger.debug("Sample fact structure:")
         logger.debug(json.dumps(facts[0], indent=2))
     
-    axes = metric_config.get('axes')  # Now getting 'axes' instead of 'axis'
-    return filter_facts(facts, axes, year)
+    axes = metric_config.get('axes')
+    return filter_facts(facts, axes, year, debug)
 
 def deduplicate_metrics(facts):
     """
-    Deduplicate facts based on fact value, member, and axis.
-    Preserves original order of entries.
+    Deduplicate facts using a normalized comparison approach that properly handles
+    multi-line fields and all relevant attributes.
     """
-    seen = set()
+    def normalize_string(s):
+        """Normalize string values by removing whitespace and sorting multi-line values."""
+        if not s:
+            return ''
+        # Split by newlines, strip each part, sort, and filter empty strings
+        parts = [p.strip() for p in str(s).split('\n')]
+        return '\n'.join(sorted(filter(None, parts)))
+
+    def create_comparison_key(fact):
+        def strip_prefix(value: str) -> str:
+            """
+            If a field has 'something:' in front, remove it.
+            E.g. 'fb:FamilyOfAppsMember' -> 'FamilyOfAppsMember'
+            """
+            # If multiline, handle each line separately
+            lines = [x.strip() for x in value.split('\n')]
+            stripped_lines = []
+            for line in lines:
+                # Remove the leading 'xxxx:' if present
+                if ':' in line:
+                    line = line.split(':', 1)[1]
+                stripped_lines.append(line)
+            # Sort lines so that order differences (Axes reversed, etc.) don’t cause duplicates
+            stripped_lines = sorted(stripped_lines)
+            return '\n'.join(stripped_lines).strip()
+        
+        # Normalize the actual “fact” field
+        fact_val = normalize_string(str(fact.get('fact', '')))
+        
+        # For axis, member, explicit_member, strip and sort lines
+        axis_val = strip_prefix(fact.get('axis', ''))
+        member_val = strip_prefix(fact.get('member', ''))
+        explicit_val = strip_prefix(fact.get('explicit_member', ''))
+        
+        # Similarly for period if you only care about the year, unify that as well:
+        # e.g. "12 months ending 12/31/2023" -> "2023"
+        # (If you do want month precision, ignore this step.)
+        period_text = fact.get('period', '')
+        
+        key_parts = [
+            fact_val,
+            axis_val,
+            member_val,
+            explicit_val,
+            normalize_string(fact.get('tag', '')),
+            # Maybe you only want to unify unit and measure if they're different, up to you
+            normalize_string(fact.get('unit_ref', '')),
+            normalize_string(fact.get('measure', '')),
+            # Potentially skip format or unify blank with 'num-dot-decimal'
+            # skip scale/decimals entirely
+            normalize_string(fact.get('sign', '')),  
+            normalize_string(fact.get('type', '')),  
+            period_text,
+        ]
+        
+        return '|||'.join(key_parts)
+
+
+    seen_keys = {}
     deduplicated = []
     
     for fact in facts:
-        # Create a unique key for comparison
-        key = (str(fact.get('fact')), 
-               str(fact.get('member')), 
-               str(fact.get('axis')))
-        
-        if key not in seen:
-            seen.add(key)
+        key = create_comparison_key(fact)
+        if key not in seen_keys:
+            seen_keys[key] = fact
             deduplicated.append(fact)
     
     return deduplicated
 
-def process_ticker(ticker: str, year: int) -> Dict:
+def process_ticker(ticker: str, year: int, config: Dict, debug: bool = False) -> Dict:
     """Process a ticker and return the structured data."""
-    config = load_config(ticker)
     result = {
         "ticker": ticker,
         "year": year,
@@ -440,9 +528,8 @@ def process_ticker(ticker: str, year: int) -> Dict:
             continue
             
         try:
-            facts = extract_segment_data(ticker, year, metric_config)
+            facts = extract_segment_data(ticker, year, metric_config, debug)
             if facts:
-                # Deduplicate the facts for this metric
                 deduped_facts = deduplicate_metrics(facts)
                 result["metrics"][metric_name] = deduped_facts
                 logger.info(f"Successfully extracted {len(facts)} facts for {metric_name}")
@@ -455,11 +542,13 @@ def process_ticker(ticker: str, year: int) -> Dict:
     
     return result
 
-def process_years(ticker: str, end_year: int) -> Dict:
+def process_years(ticker: str, end_year: int, debug: bool = False) -> Dict:
     """
-    Process a ticker for multiple years, going backwards from end_year until no data is found.
-    Returns a dictionary containing data for all available years.
+    Process a ticker for multiple years. When we can't find matching data in a year's filing,
+    go back to the most recent successful filing to search for that and subsequent years' data.
     """
+    config = load_config(ticker)
+
     result = {
         "ticker": ticker,
         "end_year": end_year,
@@ -467,43 +556,85 @@ def process_years(ticker: str, end_year: int) -> Dict:
     }
     
     current_year = end_year
-    consecutive_failures = 0
-    MAX_CONSECUTIVE_FAILURES = 1  # Stop after 1 year with no data
+    last_successful_data_year = None
+    last_successful_filing_url = None
     
-    while consecutive_failures < MAX_CONSECUTIVE_FAILURES:
+    while True:
         try:
-            # Try to get filing URL for the current year
+            # Get filing URL for the current year
             filing_url = get_filing_url(ticker, current_year)
             if not filing_url:
                 logger.warning(f"No filing found for {ticker} in {current_year}")
-                consecutive_failures += 1
-                current_year -= 1
-                continue
+                break
                 
-            # Process the year's data
-            year_data = process_ticker(ticker, current_year)
+            # Try to get data from this year's filing
+            logger.info(f"Processing {current_year} filing...")
+            year_data = process_ticker(ticker, current_year, config, debug)
             
-            # Check if we got any actual metrics data
             if any(year_data["metrics"].values()):
+                # Found matching data in this year's filing
                 result["years"][str(current_year)] = year_data["metrics"]
-                consecutive_failures = 0  # Reset counter on success
-                logger.info(f"Successfully processed {ticker} for {current_year}")
+                last_successful_data_year = current_year
+                last_successful_filing_url = filing_url
+                logger.info(f"Found matching data in {current_year} filing")
             else:
-                consecutive_failures += 1
-                logger.warning(f"No metrics data found for {ticker} in {current_year}")
-            
+                # No matching data in this year's filing - try last successful filing
+                logger.warning(f"No matching data found in {current_year} filing")
+                
+                if last_successful_filing_url and last_successful_data_year:
+                    logger.info(f"Searching {last_successful_data_year} filing for {current_year} and earlier years...")
+                    
+                    # Use the config for the ticker to get metric tags
+                    
+                    search_year = current_year
+                    
+                    while True:
+                        has_data = False
+                        year_metrics = {}
+                        
+                        # For each metric in the config, try to find data for the search year
+                        for metric_name, metric_config in config.items():
+                            tag = metric_config.get('tag')
+                            if not tag:
+                                continue
+                                
+                            # Get all facts for this metric from the last successful filing
+                            facts = extract_inline_xbrl_data(last_successful_filing_url, tag)
+                            
+                            # Filter facts for the search year
+                            filtered_facts = filter_facts(facts, metric_config.get('axes'), search_year, debug)
+                            
+                            if filtered_facts:
+                                # Deduplicate the filtered facts
+                                deduped_facts = deduplicate_metrics(filtered_facts)
+                                if deduped_facts:
+                                    has_data = True
+                                    year_metrics[metric_name] = deduped_facts
+                        
+                        if has_data:
+                            result["years"][str(search_year)] = year_metrics
+                            logger.info(f"Found data for {search_year} in {last_successful_data_year} filing")
+                            search_year -= 1
+                        else:
+                            logger.warning(f"No data found for {search_year} in {last_successful_data_year} filing")
+                            break
+                
+                break  # Exit main loop after checking historical data
+                
         except Exception as e:
             logger.error(f"Error processing {ticker} for {current_year}: {e}")
-            consecutive_failures += 1
+            break
             
         current_year -= 1
         
     if not result["years"]:
-        logger.warning(f"No data found for {ticker} in any year")
+        logger.warning(f"No matching data found for {ticker} in any year")
     else:
         logger.info(f"Successfully processed {len(result['years'])} years for {ticker}")
-        
-    return result
+        years_found = sorted(map(int, result["years"].keys()))
+        logger.info(f"Data found for years: {years_found}")
+
+    return result  
 
 def save_combined_results(result: Dict, ticker: str, end_year: int):
     """Save combined results to a JSON file."""
@@ -513,9 +644,11 @@ def save_combined_results(result: Dict, ticker: str, end_year: int):
     logger.info(f"Combined results saved to {filename}")
 
 def main():
-    if len(sys.argv) != 3:
-        logger.error("Usage: python sec_breakdown.py <TICKER> <END_YEAR>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='Process SEC filings for segment breakdown analysis')
+    parser.add_argument('ticker', type=str, help='Stock ticker symbol')
+    parser.add_argument('end_year', type=int, help='End year for analysis')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode to retain all fields')
+    args = parser.parse_args()
     
     # Load environment variables
     load_dotenv()
@@ -523,17 +656,9 @@ def main():
         logger.error("Error: FMP_API_KEY not found in .env file")
         sys.exit(1)
     
-    ticker = sys.argv[1].upper()
     try:
-        end_year = int(sys.argv[2])
-    except ValueError:
-        logger.error("Error: End year must be a valid integer")
-        sys.exit(1)
-    
-    try:
-        # Process multiple years
-        result = process_years(ticker, end_year)
-        save_combined_results(result, ticker, end_year)
+        result = process_years(args.ticker.upper(), args.end_year, args.debug)
+        save_combined_results(result, args.ticker.upper(), args.end_year)
     except Exception as e:
         logger.error(f"Error: {e}")
         sys.exit(1)
