@@ -1,0 +1,81 @@
+{
+    "AAPL": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["Product Or Service Axis"],
+            "name_mapping": {
+                "us-gaap:ProductMember": "Products",
+                "us-gaap:ServiceMember": "Services"
+            }
+        },
+        "segmentation": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["Product Or Service Axis"],
+            "name_mapping": {
+                "aapl:IPhoneMember": "iPhone",
+                "aapl:MacMember": "Mac",
+                "aapl:IPadMember": "iPad",
+                "aapl:WearablesHomeandAccessoriesMember": "Wearables, Home and Accessories",
+                "us-gaap:ServiceMember": "Services"
+            }
+        }
+    },
+    "GOOGL": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["US-GAAP Statement Business Segments Axis"],
+            "name_mapping": {
+                "goog:GoogleServicesMember": "Google Services",
+                "goog:GoogleCloudMember": "Google Cloud",
+                "us-gaap:AllOtherSegmentsMember": "Other Segments",
+                "goog:GoogleInc.Member": "Google, Inc."
+            }
+        },
+        "operating_income": {
+            "tag": "us-gaap:OperatingIncomeLoss",
+            "axes": ["US-GAAP Statement Business Segments Axis", "Consolidation Items Axis"],
+            "name_mapping": {
+                "us-gaap:OperatingSegmentsMember\ngoog:GoogleServicesMember": "Google Services",
+                "goog:GoogleCloudMember\nus-gaap:OperatingSegmentsMember": "Google Cloud",
+                "us-gaap:OperatingSegmentsMember\nus-gaap:AllOtherSegmentsMember": "Other Segments",
+                "us-gaap:OperatingSegmentsMember\ngoog:GoogleInc.Member": "Google Inc."
+            }
+        },
+        "segmentation": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["US-GAAP Statement Business Segments Axis", "Product Or Service Axis"],
+            "name_mapping": {
+                "goog:GoogleServicesMember\ngoog:GoogleSearchOtherMember": "Google Search", 
+                "goog:GoogleServicesMember\ngoog:YouTubeAdvertisingRevenueMember": "YouTube Advertising", 
+                "goog:GoogleNetworkMember\ngoog:GoogleServicesMember": "Google Network", 
+                "goog:GoogleServicesMember\ngoog:GoogleAdvertisingRevenueMember": "Total Advertising",
+                "goog:SubscriptionsPlatformsAndDevicesRevenueMember\ngoog:GoogleServicesMember": "Subscriptions, Platforms, and Devices", 
+                "goog:OtherRevenuesMember\ngoog:GoogleServicesMember": "Subscriptions, Platforms, and Devices", 
+                "goog:GoogleServicesMember": "Total Services", 
+                "goog:GoogleCloudMember": "Google Cloud", 
+                "goog:GoogleInc.Member":"Google, Inc.",
+                "us-gaap:AllOtherSegmentsMember": "Other Segments"
+            }
+        }
+    },
+    "MSFT": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["US-GAAP Statement Business Segments Axis"],
+            "name_mapping": {
+                "msft:ProductivityAndBusinessProcessesMember": "Productivity and Business Processes",
+                "msft:IntelligentCloudMember": "Intelligent Cloud",
+                "msft:MorePersonalComputingMember": "More Personal Computing"
+            }
+        },
+        "operating_income": {
+            "tag": "us-gaap:OperatingIncomeLoss",
+            "axes": ["US-GAAP Statement Business Segments Axis"],
+            "name_mapping": {
+                "msft:ProductivityAndBusinessProcessesMember": "Productivity and Business Processes",
+                "msft:IntelligentCloudMember": "Intelligent Cloud",
+                "msft:MorePersonalComputingMember": "More Personal Computing"
+            }
+        }
+    }
+}
