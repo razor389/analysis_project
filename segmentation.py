@@ -455,16 +455,66 @@ def process_ticker(ticker: str, year: int) -> Dict:
     
     return result
 
-def save_results(result: Dict, ticker: str, year: int):
-    """Save results to a JSON file."""
-    filename = f"{ticker}_{year}_breakdown.json"
+def process_years(ticker: str, end_year: int) -> Dict:
+    """
+    Process a ticker for multiple years, going backwards from end_year until no data is found.
+    Returns a dictionary containing data for all available years.
+    """
+    result = {
+        "ticker": ticker,
+        "end_year": end_year,
+        "years": {}
+    }
+    
+    current_year = end_year
+    consecutive_failures = 0
+    MAX_CONSECUTIVE_FAILURES = 1  # Stop after 1 year with no data
+    
+    while consecutive_failures < MAX_CONSECUTIVE_FAILURES:
+        try:
+            # Try to get filing URL for the current year
+            filing_url = get_filing_url(ticker, current_year)
+            if not filing_url:
+                logger.warning(f"No filing found for {ticker} in {current_year}")
+                consecutive_failures += 1
+                current_year -= 1
+                continue
+                
+            # Process the year's data
+            year_data = process_ticker(ticker, current_year)
+            
+            # Check if we got any actual metrics data
+            if any(year_data["metrics"].values()):
+                result["years"][str(current_year)] = year_data["metrics"]
+                consecutive_failures = 0  # Reset counter on success
+                logger.info(f"Successfully processed {ticker} for {current_year}")
+            else:
+                consecutive_failures += 1
+                logger.warning(f"No metrics data found for {ticker} in {current_year}")
+            
+        except Exception as e:
+            logger.error(f"Error processing {ticker} for {current_year}: {e}")
+            consecutive_failures += 1
+            
+        current_year -= 1
+        
+    if not result["years"]:
+        logger.warning(f"No data found for {ticker} in any year")
+    else:
+        logger.info(f"Successfully processed {len(result['years'])} years for {ticker}")
+        
+    return result
+
+def save_combined_results(result: Dict, ticker: str, end_year: int):
+    """Save combined results to a JSON file."""
+    filename = f"{ticker}_{end_year}_historical_breakdown.json"
     with open(filename, 'w') as f:
         json.dump(result, f, indent=2)
-    logger.info(f"Results saved to {filename}")
+    logger.info(f"Combined results saved to {filename}")
 
 def main():
     if len(sys.argv) != 3:
-        logger.error("Usage: python sec_breakdown.py <TICKER> <YEAR>")
+        logger.error("Usage: python sec_breakdown.py <TICKER> <END_YEAR>")
         sys.exit(1)
     
     # Load environment variables
@@ -475,14 +525,15 @@ def main():
     
     ticker = sys.argv[1].upper()
     try:
-        year = int(sys.argv[2])
+        end_year = int(sys.argv[2])
     except ValueError:
-        logger.error("Error: Year must be a valid integer")
+        logger.error("Error: End year must be a valid integer")
         sys.exit(1)
     
     try:
-        result = process_ticker(ticker, year)
-        save_results(result, ticker, year)
+        # Process multiple years
+        result = process_years(ticker, end_year)
+        save_combined_results(result, ticker, end_year)
     except Exception as e:
         logger.error(f"Error: {e}")
         sys.exit(1)

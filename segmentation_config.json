@@ -15,6 +15,16 @@
             "axes": ["US-GAAP Statement Business Segments Axis"]
         }
     },
+    "GOOGL": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["US-GAAP Statement Business Segments Axis"]
+        },
+        "operating_income": {
+            "tag": "us-gaap:OperatingIncomeLoss",
+            "axes": ["US-GAAP Statement Business Segments Axis", "Consolidation Items Axis"]
+        }
+    },
     "META": {
         "revenue": {
             "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
