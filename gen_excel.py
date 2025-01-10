@@ -1735,7 +1735,7 @@ def write_valuation_sheet(writer, final_output, ticker):
                 "Current ROE:": f"='Co. Desc'!{first_forecast_col}24",
                 "Retained % adjustment:": 0.10,
                 # unchanged, presumably references other sheet cells
-                "Retained %:": "=1 - 'Analyses'!F5 - 'Analyses'!F7 - B18",
+                "Retained %:": "=1 - 'Analyses'!K5 - 'Analyses'!K7 - B18",
                 "Net BV growth:": "=B17*B19",
                 "BV in year 10:": "=FV(B20, 10, , -B16)",
                 "EPS Adjustment Factor:": 1.5,
