@@ -1275,15 +1275,19 @@ if __name__ == "__main__":
     
     # Get basic revenue segmentation if needed
     if not segmentation_data:
+        print("getting basic revenue segmentation")
         revenue_segmentation = get_revenue_segmentation(symbol)
         if revenue_segmentation:
+            print(f"{revenue_segmentation.items()}")
             # Convert to unified format
             segmentation_data = {}
-            for year, segments in revenue_segmentation.items():
-                segmentation_data[year] = {
+            for year_int, segments in revenue_segmentation.items():
+                year_str = str(year_int)
+                segmentation_data[year_str] = {
                     "revenue": segments,
                     "segmentation": segments
                 }
+
 
     years_to_extract = list(range(start_year, end_year + 1))
 
