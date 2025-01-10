@@ -20,6 +20,18 @@
             }
         }
     },
+    "AXON": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["Statement Business Segments Axis", "Product Or Service Axis"],
+            "name_mapping": {
+                "us-gaap:ProductMember\naxon:TaserSegmentMember": "Products: Taser",
+                "us-gaap:ServiceMember\naxon:TaserSegmentMember": "Services: Taser",
+                "us-gaap:ProductMember\naxon:SoftwareAndSensorsSegmentMember": "Products: Software And Sensors",
+                "us-gaap:ServiceMember\naxon:SoftwareAndSensorsSegmentMember": "Services: Software And Sensors"
+            }
+        }
+    },
     "GOOGL": {
         "revenue": {
             "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
@@ -55,6 +67,35 @@
                 "goog:GoogleCloudMember": "Google Cloud", 
                 "goog:GoogleInc.Member":"Google, Inc.",
                 "us-gaap:AllOtherSegmentsMember": "Other Segments"
+            }
+        }
+    },
+    "META": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["US-GAAP Statement Business Segments Axis", "Product Or Service Axis"],
+            "name_mapping": {
+                "meta:FamilyOfAppsMember": "Family Of Apps",
+                "meta:RealityLabsMember": "Reality Labs",
+                "fb:FamilyOfAppsMember": "Family Of Apps",
+                "fb:RealityLabsMember": "Reality Labs",
+                "us-gaap:AdvertisingMember\nmeta:FamilyOfAppsMember": "Advertising",
+                "meta:FamilyOfAppsMember\nus-gaap:ServiceOtherMember": "Other Services",
+                "us-gaap:ServiceOtherMember\nmeta:FamilyOfAppsMember": "Other Services",
+                "us-gaap:AdvertisingMember\nfb:FamilyOfAppsMember": "Advertising",
+                "us-gaap:ServiceOtherMember\nfb:FamilyOfAppsMember": "Other Services",
+                "us-gaap:AdvertisingMember": "Advertising",
+                "us-gaap:ServiceOtherMember": "Other Services"
+            }
+        },
+        "operating_income": {
+            "tag": "us-gaap:OperatingIncomeLoss",
+            "axes": ["US-GAAP Statement Business Segments Axis", "Product Or Service Axis"],
+            "name_mapping": {
+                "meta:FamilyOfAppsMember": "Family Of Apps",
+                "meta:RealityLabsMember": "Reality Labs",
+                "fb:FamilyOfAppsMember": "Family Of Apps",
+                "fb:RealityLabsMember": "Reality Labs"
             }
         }
     },

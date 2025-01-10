@@ -303,54 +303,37 @@ def extract_inline_xbrl_data(url, target_tag):
     return results
 
 def filter_facts(facts: List[Dict], axes: Optional[Union[List[str], str]], year: int, debug: bool = False) -> List[Dict]:
-    """Filter facts by axes and year."""
+    """Filter facts by matching tag, at least one axis, and year."""
     if not facts:
         return []
 
+    # Filter by year
     period_filtered = [
         fact for fact in facts 
         if fact.get('period', '') and str(year) in fact.get('period', '').split('/')[-1]
     ]
     
-    logger.info(f"Filtering by period ending in year {year}:")
-    logger.info(f"Before period filtering: {len(facts)} facts")
-    logger.info(f"After period filtering: {len(period_filtered)} facts")
-    
+    logger.info(f"Filtering by period ending in year {year}: {len(period_filtered)} facts found.")
+
     if not axes:
-        logger.info(f"No axes specified, returning {len(period_filtered)} facts")
         return period_filtered
-    
+
     if isinstance(axes, str):
         axes = [axes]
-    
-    axis_filtered = []
-    for fact in period_filtered:
-        fact_axes = fact.get('axis', '').split('\n')
-        if all(
-            any(req_axis.lower() in ax.lower() for ax in fact_axes)
-            for req_axis in axes
-        ):
-            axis_filtered.append(fact)
-    
-    logger.info(f"Filtering by axes {axes}:")
-    logger.info(f"Before axis filtering: {len(period_filtered)} facts")
-    logger.info(f"After axis filtering: {len(axis_filtered)} facts")
-    
-    if len(axis_filtered) == 0:
-        logger.warning("No facts found after filtering. Available axes:")
-        all_axes = set()
-        for fact in period_filtered:
-            fact_axes = fact.get('axis', '').split('\n')
-            all_axes.update(fact_axes)
-        for ax in all_axes:
-            if ax:
-                logger.info(f"- {ax}")
-            
-        logger.info("Available periods:")
-        periods = set(fact.get('period') for fact in facts if fact.get('period'))
-        for period in sorted(periods):
-            logger.info(f"- {period}")
-    
+
+    # Match if at least one axis is in the configured axes
+    axis_filtered = [
+        fact for fact in period_filtered
+        if any(req_axis.lower() in fact.get('axis', '').lower() for req_axis in axes)
+    ]
+
+    logger.info(f"Filtering by axes {axes}: {len(axis_filtered)} facts found.")
+
+    if not axis_filtered:
+        logger.warning("No facts found after axis filtering.")
+        available_axes = {fact.get('axis') for fact in period_filtered if fact.get('axis')}
+        logger.info(f"Available axes in data: {available_axes}")
+
     return axis_filtered
 
 def deduplicate_metrics(facts):
