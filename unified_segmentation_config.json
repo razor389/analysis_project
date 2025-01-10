@@ -20,6 +20,21 @@
             }
         }
     },
+    "AMZN": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["Product Or Service Axis"],
+            "name_mapping": {
+                "amzn:OnlineStoresMember": "Online Stores",
+                "amzn:PhysicalStoresMember": "Physical Stores",
+                "amzn:ThirdPartySellerServicesMember": "Third Party Seller Services",
+                "us-gaap:AdvertisingMemberr": "Advertising",
+                "amzn:SubscriptionServicesMember": "Subscription Services",
+                "amzn:AmazonWebServicesMember": "AWS",
+                "amzn:OtherServicesMember": "Other Services"
+            }
+        }
+    },
     "AXON": {
         "revenue": {
             "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
