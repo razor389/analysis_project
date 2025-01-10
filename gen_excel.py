@@ -1639,7 +1639,7 @@ def write_valuation_sheet(writer, final_output, ticker):
     #   F5 => PE Multiple
     # =========================================================================
     settings = {
-        (3, 2): ("ADR Multiple:", 1),                           # B3
+        (3, 2): ("ADR:ORD:", 1),                           # B3
         (4, 2): (f"USD:{reported_currency} rate:", 1),          # B4
         (3, 4): ("EPS growth rate:", 0.10),                     # D3
         (4, 4): ("Dividend growth rate:", 0.10),                # D4
@@ -1811,11 +1811,11 @@ def write_valuation_sheet(writer, final_output, ticker):
                 "Debt:": "='Studies'!D39",
                 
                 # Equity Value = EV - Debt
-                "Equity Value:": "=H14 - H15",
+                "Equity Value:": "=(H14 - H15) * B4",
                 
                 # Shares Outstanding => from co desc, row ? 
                 #   If your co desc has shares in row 2 for that "year," adapt as needed.
-                "Shares Outstanding:": f"='Co. Desc'!{first_forecast_col}16",
+                "Shares Outstanding:": f"='Co. Desc'!{first_forecast_col}16 * (1/B3)",
                 
                 # Share Value = Equity Value / Shares Outstanding
                 "Share Value:": "=H16 / H17",
