@@ -1,3 +1,6 @@
+# acm_analysis.py
+
+import argparse
 import json
 import os
 import sys
@@ -242,7 +245,7 @@ def extract_series_values_by_year(basic_data: dict, key: str) -> dict:
 
     return result
 
-def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict, profile: dict):
+def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile: dict):
     # Load the three financial statements
     bs_data = load_json(f"{symbol}_bs_annual.json")
     ic_data = load_json(f"{symbol}_ic_annual.json")
@@ -386,6 +389,8 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict, profi
         pcfs_low = yearly_low / addback_dep_earnings_ps if addback_dep_earnings_ps != 0 else None
         pcfs_high = yearly_high / addback_dep_earnings_ps if addback_dep_earnings_ps != 0 else None
 
+        year_segments = segmentation_data.get(str(year), {})
+
         # Prepare the three sections
         company_description = {
             "net_profit": net_profit,
@@ -415,13 +420,10 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict, profi
             "depreciation_percent": depreciation_percent
         }
 
-        # Fetch revenue breakdown for the current year
-        revenue_breakdown = revenue_segmentation.get(year, {})
-
         # Structure the revenues with breakdown
         revenues_structured = {
             "total_revenues": revenues,
-            "breakdown": revenue_breakdown
+            "breakdown": year_segments.get("revenue", {})
         }
 
         profit_description = {
@@ -438,7 +440,10 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict, profi
             "amortization_depreciation": amort_dep,  
             "free_cash_flow": fcf,
             "capex": capex,
-            "operating_earnings": operating_earnings,
+            "operating_earnings": {
+                "total_operating_earnings": operating_earnings,
+                "breakdown": year_segments.get("operating_income", {})
+            },
             "operating_earnings_percent_revenue": operating_earnings_pct,
             "external_costs": {
                 "total_external_costs": extern_costs,
@@ -511,7 +516,8 @@ def extract_yoy_data(symbol: str, years: list, revenue_segmentation: dict, profi
             "analyses": analysis,
             "profit_description": profit_description,
             "balance_sheet": balance_sheet,
-            "hist_pricing": hist_pricing
+            "hist_pricing": hist_pricing,
+            "segmentation": year_segments.get("segmentation", {})
         }
 
         prev_shares_outstanding = shares_outstanding
@@ -790,6 +796,7 @@ def compute_profit_description_characteristics(yoy_data: dict):
             "cagr_selling_marketing_general_admin_percent": None,
             # Initialize empty dicts for dynamic breakdown items
             "cagr_external_costs_breakdown_percent": {},
+            "cagr_operating_earnings_breakdown_percent": {},
             "cagr_revenues_breakdown_percent": {}
         }
 
@@ -798,6 +805,7 @@ def compute_profit_description_characteristics(yoy_data: dict):
     # Initialize nested dictionaries before assignment
     results["cagr_external_costs_breakdown_percent"] = {}
     results["cagr_revenues_breakdown_percent"] = {}
+    results["cagr_operating_earnings_breakdown_percent"] = {}
 
     def get_val(year, key_chain):
         d = yoy_data[year]
@@ -825,7 +833,7 @@ def compute_profit_description_characteristics(yoy_data: dict):
         "cagr_total_expenses_percent": ("profit_description", "expenses", "total_expenses"),
         "cagr_ebitda_percent": ("profit_description", "ebitda"),
         "cagr_free_cash_flow_percent": ("profit_description", "free_cash_flow"),
-        "cagr_operating_earnings_percent": ("profit_description", "operating_earnings"),
+        "cagr_operating_earnings_percent": ("profit_description", "operating_earnings", "total_operating_earnings"),
         "cagr_total_external_costs_percent": ("profit_description", "external_costs", "total_external_costs"),
         "cagr_earnings_percent": ("profit_description", "earnings"),
         "cagr_cost_of_revenue_percent": ("profit_description", "expenses", "breakdown", "cost_of_revenue"),
@@ -872,6 +880,26 @@ def compute_profit_description_characteristics(yoy_data: dict):
         else:
             cagr_key = f"cagr_revenues_{rev_item}_percent"
             results["cagr_revenues_breakdown_percent"][cagr_key] = None
+
+    operating_earnings_segments = set()
+    for year in sorted_years:
+        breakdown = yoy_data[year].get("profit_description", {}).get("operating_earnings", {}).get("breakdown", {})
+        operating_earnings_segments.update(breakdown.keys())
+
+    for segment in operating_earnings_segments:
+        vals = []
+        for year in sorted_years:
+            breakdown = yoy_data[year].get("profit_description", {}).get("operating_earnings", {}).get("breakdown", {})
+            val = breakdown.get(segment)
+            if val is not None:
+                vals.append((int(year), float(val)))
+        
+        if len(vals) >= 2:
+            cagr_key = f"cagr_operating_earnings_{segment}_percent"
+            results["cagr_operating_earnings_breakdown_percent"][cagr_key] = calculate_cagr(vals)
+        else:
+            cagr_key = f"cagr_operating_earnings_{segment}_percent"
+            results["cagr_operating_earnings_breakdown_percent"][cagr_key] = None
 
     return results
 
@@ -1043,6 +1071,16 @@ def transform_final_output(final_output: dict, stock_price: float = None):
         "industry": final_output.get("industry_comparison", {})
     }
 
+    # Add segmentation data directly from yoy_data
+    segmentation = {}
+    for year in sorted_years:
+        year_data = yoy_data[year]
+        if "segmentation" in year_data and year_data["segmentation"]:
+            segmentation[str(year)] = year_data["segmentation"]
+    
+    if segmentation:  # Only add if we have segmentation data
+        rearranged["segmentation"] = segmentation
+
     rearranged["qualities"] = final_output.get("qualities")
 
     return rearranged
@@ -1161,17 +1199,20 @@ def finalize_output(rearranged_output):
     processed = normalize_data(rearranged_output)
     return processed
 
-
 if __name__ == "__main__":
-    # Command line arguments: symbol start_year end_year
-    if len(sys.argv) < 3:
-        print("Usage: python fmp_analysis.py SYMBOL START_YEAR [--ignore_qualities] [--debug]")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='Process financial data analysis')
+    parser.add_argument('symbol', type=str, help='Stock ticker symbol')
+    parser.add_argument('start_year', type=int, help='Start year for analysis')
+    parser.add_argument('--ignore_qualities', action='store_true', help='Skip qualities analysis')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    parser.add_argument('--basic_segmentation', action='store_true', 
+                       help='Use basic FMP segmentation instead of unified')
+    args = parser.parse_args()
 
-    symbol = sys.argv[1].upper()
-    start_year = int(sys.argv[2])
-    ignore_qualities = "--ignore_qualities" in sys.argv
-    debug = "--debug" in sys.argv
+    symbol = args.symbol.upper()
+    start_year = int(args.start_year)
+    ignore_qualities = args.ignore_qualities
+    debug = args.debug
 
     if not FMP_API_KEY:
         print("ERROR: FMP_API_KEY not found in environment. Please set FMP_API_KEY in .env")
@@ -1194,11 +1235,6 @@ if __name__ == "__main__":
 
     # Fetch and save the basic financials
     get_basic_financials(symbol)
-
-    # Fetch revenue segmentation
-    revenue_segmentation = get_revenue_segmentation(symbol)
-    if not revenue_segmentation:
-        print("Revenue segmentation data is empty. Proceeding without segmentation breakdown.")
 
     # Determine the latest available year from financial statements
     def get_latest_available_year(symbol: str, statement_types: list) -> int:
@@ -1226,6 +1262,29 @@ if __name__ == "__main__":
         print("START_YEAR cannot be greater than END_YEAR.")
         sys.exit(1)
 
+     # Get unified segmentation if available and not using basic segmentation
+    segmentation_data = {}
+    if not args.basic_segmentation:
+        try:
+            from unified_segmentation import process_years
+            segmentation_data = process_years(symbol, end_year)
+            if not segmentation_data:
+                print("No unified segmentation data available, using basic segmentation")
+        except Exception as e:
+            print(f"Error getting unified segmentation: {e}, using basic segmentation")
+    
+    # Get basic revenue segmentation if needed
+    if not segmentation_data:
+        revenue_segmentation = get_revenue_segmentation(symbol)
+        if revenue_segmentation:
+            # Convert to unified format
+            segmentation_data = {}
+            for year, segments in revenue_segmentation.items():
+                segmentation_data[year] = {
+                    "revenue": segments,
+                    "segmentation": segments
+                }
+
     years_to_extract = list(range(start_year, end_year + 1))
 
     # Fetch company profile
@@ -1235,7 +1294,7 @@ if __name__ == "__main__":
 
     # Extract YOY data
     yoy_data = extract_yoy_data(symbol, years_to_extract, 
-                                revenue_segmentation, profile)
+                                segmentation_data, profile)
 
     # Compute Investment Characteristics
     investment_characteristics = compute_investment_characteristics(yoy_data)
@@ -1277,7 +1336,7 @@ if __name__ == "__main__":
         "data": yoy_data,
         "qualities": "",
         "industry_comparison": industry_data,
-        "isAdr": profile.get("isAdr", False)
+        "isAdr": profile.get("isAdr", False),
     }
 
     # Process qualities
