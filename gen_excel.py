@@ -190,14 +190,14 @@ def write_company_description(writer, final_output):
     sp_cell = ws.cell(row=2, column=7, value=stock_price)
     sp_cell.fill = data_fill
     sp_cell.font = label_font
-    sp_cell.number_format = '$#,##0.00'
+    sp_cell.number_format = '#,##0.00'
     sp_cell.border = thin_border
 
     market_cap = to_float(cd_info.get("marketCapitalization")) / 1_000_000
     mc_cell = ws.cell(row=2, column=9, value=market_cap)
     mc_cell.fill = data_fill
     mc_cell.font = label_font
-    mc_cell.number_format = '$#,##0'
+    mc_cell.number_format = '#,##0'
     mc_cell.border = thin_border
 
     # Sort years for consistent column ordering
@@ -1571,7 +1571,7 @@ def write_hist_pricing_sheet(writer, final_output):
         buy_cell.fill = data_fill
         buy_cell.font = data_arial_bold_font
         buy_cell.border = thin_border
-        buy_cell.number_format = '$#,##0.00'
+        buy_cell.number_format = '#,##0.00'
         buy_cell.alignment = right_alignment
         
         # Write Sell row (Used * Avg High)
@@ -1586,7 +1586,7 @@ def write_hist_pricing_sheet(writer, final_output):
         sell_cell.fill = data_fill
         sell_cell.font = data_arial_bold_font
         sell_cell.border = thin_border
-        sell_cell.number_format = '$#,##0.00'
+        sell_cell.number_format = '#,##0.00'
         sell_cell.alignment = right_alignment
         
         # Add border around the entire box
@@ -1784,7 +1784,7 @@ def write_valuation_sheet(writer, final_output, ticker):
                 # EBIT = operating margin * sales (most recent year)
                 #   If your Co. Desc sheet has operating margin in row 17 and
                 #   sales in row 12 for the "most recent year," adapt as needed.
-                "EBIT:": f"='Analyses'!{first_forecast_col}20 * 'Analyses'!{first_forecast_col}10",
+                "EBIT:": f"='Analyses'!{first_forecast_col}20 * 'Analyses'!{first_forecast_col}10 * B4",
                 
                 # Required return (cost of capital) => default 12%
                 "Required Return:": 0.12,
@@ -1808,10 +1808,10 @@ def write_valuation_sheet(writer, final_output, ticker):
                 "EV:": "=H9 / H13",
                 
                 # Debt => from 'Studies'!D39 (Long-term debt)
-                "Debt:": "='Studies'!D39",
+                "Debt:": "='Studies'!D39 * B4",
                 
                 # Equity Value = EV - Debt
-                "Equity Value:": "=(H14 - H15) * B4",
+                "Equity Value:": "=(H14 - H15)",
                 
                 # Shares Outstanding => from co desc, row ? 
                 #   If your co desc has shares in row 2 for that "year," adapt as needed.
