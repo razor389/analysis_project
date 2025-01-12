@@ -1229,7 +1229,7 @@ def write_qualities_sheet(writer, final_output):
     ws = wb["Qualities"]
 
     # Retrieve the forum summary text
-    text = final_output.get("qualities", "No forum summary available.")
+    text = final_output.get("qualities", "No summary available.")
 
     # Optional: set a descriptive title in the first cell
     ws["A1"] = "Core Analysis"
