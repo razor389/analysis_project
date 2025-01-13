@@ -2,7 +2,7 @@ import win32com.client
 import json
 import logging
 import sys
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Set
 import re
 from datetime import datetime
 import os
@@ -25,6 +25,27 @@ SENDER_EMAIL = os.getenv('SENDER_EMAIL')
 if not SENDER_EMAIL:
     logging.error("SENDER_EMAIL not found in .env file")
     sys.exit(1)
+
+def load_ticker_config(config_path: str = 'ticker_email_config.json') -> Dict[str, List[str]]:
+    """
+    Load ticker configuration from JSON file.
+    
+    Format:
+    {
+        "ADYEY": ["ADYYF", "Adyen"],
+        "OTHER": ["Term1", "Term2"]
+    }
+    """
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        return config
+    except FileNotFoundError:
+        logging.error(f"Config file not found: {config_path}")
+        sys.exit(1)
+    except json.JSONDecodeError:
+        logging.error(f"Invalid JSON in config file: {config_path}")
+        sys.exit(1)
 
 def email_to_unix(email_timestamp):
     """
@@ -64,9 +85,12 @@ def fetch_sent_emails(namespace):
         logging.error(f"Error fetching sent emails: {e}")
         return []
 
-def is_valid_ticker(ticker: str) -> bool:
-    """Validate ticker format (1-5 uppercase letters)."""
-    return bool(re.match(r'^[A-Z]{1,5}$', ticker))
+def is_valid_search_term(term: str) -> bool:
+    """
+    Validate search term format.
+    Allow either ticker format (1-5 uppercase letters) or company names (word characters and spaces)
+    """
+    return bool(re.match(r'^[A-Z]{1,5}$', term) or re.match(r'^[\w\s-]+$', term))
 
 def clean_message(raw_message: str) -> str:
     """
@@ -98,22 +122,25 @@ def clean_message(raw_message: str) -> str:
 
     return cleaned
 
-def filter_emails(messages, ticker: str) -> List[Dict[str, Any]]:
+def filter_emails(messages, primary_ticker: str, search_terms: Set[str]) -> List[Dict[str, Any]]:
     """
-    Filter emails that contain the ticker in the subject line.
+    Filter emails that contain any of the search terms in the subject line.
 
     Args:
         messages: Outlook messages to filter.
-        ticker: Ticker symbol to search for.
+        primary_ticker: The main ticker symbol for output file naming.
+        search_terms: Set of terms to search for (including primary ticker).
 
     Returns:
-        A list of dictionaries containing filtered email data.
+        List of dictionaries containing filtered email data.
     """
     filtered_emails = []
     processed_count = 0
+    seen_emails = set()  # Track unique emails to avoid duplicates
 
-    ticker_upper = ticker.upper()
-    pattern = r'\b' + re.escape(ticker_upper) + r'\b'
+    # Create regex patterns for all search terms
+    patterns = {term: re.compile(r'\b' + re.escape(term) + r'\b', re.IGNORECASE) 
+               for term in search_terms}
 
     for message in messages:
         try:
@@ -121,19 +148,30 @@ def filter_emails(messages, ticker: str) -> List[Dict[str, Any]]:
                 continue
 
             subject = str(message.Subject).strip()
-
-            if re.search(pattern, subject.upper()):
+            
+            # Check if any search term appears in the subject
+            if any(pattern.search(subject) for pattern in patterns.values()):
                 sent_time = message.SentOn.strftime('%Y-%m-%d %H:%M:%S')
                 unix_timestamp = email_to_unix(sent_time)
-                raw_body = str(message.Body).strip()
-                cleaned_body = clean_message(raw_body) 
+                
+                # Use combination of timestamp and subject as unique identifier
+                email_id = f"{unix_timestamp}_{subject}"
+                
+                if email_id not in seen_emails:
+                    seen_emails.add(email_id)
+                    raw_body = str(message.Body).strip()
+                    cleaned_body = clean_message(raw_body)
 
-                logging.info(f"Found {ticker_upper} in email subject: {subject}")
-                filtered_emails.append({
-                    "timestamp": unix_timestamp,
-                    "message": cleaned_body,
-                    "authorEmail": "smgacm@gmail.com"  # Use the sender email from environment
-                })
+                    # Log which terms were found
+                    found_terms = [term for term, pattern in patterns.items() 
+                                 if pattern.search(subject)]
+                    logging.info(f"Found terms {found_terms} in email subject: {subject}")
+                    
+                    filtered_emails.append({
+                        "timestamp": unix_timestamp,
+                        "message": cleaned_body,
+                        "authorEmail": SENDER_EMAIL
+                    })
 
             processed_count += 1
             if processed_count % 1000 == 0:
@@ -145,22 +183,34 @@ def filter_emails(messages, ticker: str) -> List[Dict[str, Any]]:
 
     return filtered_emails
 
-def filter_emails_by_ticker(ticker: str) -> str:
+def filter_emails_by_config(ticker: str, config_path: str = 'ticker_email_config.json') -> str:
     """
-    Main function to filter sent emails by ticker.
+    Main function to filter sent emails by ticker and its related terms from config.
 
     Args:
-        ticker: The ticker symbol to search for in email subjects.
+        ticker: The primary ticker symbol to search for.
+        config_path: Path to the ticker configuration file.
 
     Returns:
         The path to the JSON file containing filtered emails.
     """
     ticker = ticker.upper()
+    
+    # Load config and get search terms
+    config = load_ticker_config(config_path)
+    if ticker not in config:
+        logging.error(f"Ticker {ticker} not found in config file")
+        return ""
+    
+    # Create set of all search terms including the primary ticker
+    search_terms = set([ticker] + config[ticker])
+    
+    # Validate all search terms
+    for term in search_terms:
+        if not is_valid_search_term(term):
+            raise ValueError(f"Invalid search term: {term}")
 
-    if not is_valid_ticker(ticker):
-        raise ValueError("Ticker must be 1-5 uppercase letters")
-
-    logging.info(f"Searching for ticker: {ticker} in Sent Items")
+    logging.info(f"Searching for terms: {search_terms} in Sent Items")
 
     namespace = initialize_outlook()
     messages = fetch_sent_emails(namespace)
@@ -169,10 +219,10 @@ def filter_emails_by_ticker(ticker: str) -> str:
         logging.info("No messages to process.")
         return ""
 
-    filtered_emails = filter_emails(messages, ticker)
+    filtered_emails = filter_emails(messages, ticker, search_terms)
 
     if not filtered_emails:
-        logging.info(f"No emails found containing '{ticker}' in the subject line.")
+        logging.info(f"No emails found containing any search terms for {ticker}")
         return ""
 
     output_file = os.path.join('output', f'{ticker}_sent_emails.json')
@@ -183,7 +233,7 @@ def filter_emails_by_ticker(ticker: str) -> str:
     logging.info(f"Email filtering complete. Results saved to {output_file}")
 
     email_count = len(filtered_emails)
-    print(f"\nFound {email_count} emails sent by {SENDER_EMAIL} containing '{ticker}' in the subject line.")
+    print(f"\nFound {email_count} emails sent by {SENDER_EMAIL} containing search terms for '{ticker}'")
     print(f"Results saved to: {output_file}")
 
     return output_file
@@ -196,8 +246,7 @@ def main():
             sys.exit(1)
 
         ticker = sys.argv[1].upper()
-
-        filter_emails_by_ticker(ticker)
+        filter_emails_by_config(ticker)
 
     except ValueError as ve:
         logging.error(f"Validation Error: {ve}")
