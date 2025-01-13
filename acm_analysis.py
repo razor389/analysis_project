@@ -299,7 +299,7 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         cost_of_selling_and_marketing_gen_and_admin = ic.get('sellingGeneralAndAdministrativeExpenses') or 0
         expenses = cost_of_selling_and_marketing_gen_and_admin + cost_of_res_and_dev + cost_of_revenue
         amort_dep = cf.get('depreciationAndAmortization')
-        ebitda = revenues - expenses + amort_dep if revenues and expenses and amort_dep else None
+        ebitda = ebit + amort_dep if revenues and expenses and amort_dep else None
         capex = cf.get('capitalExpenditure')
         fcf = ebitda + capex if ebitda and capex else None
 
