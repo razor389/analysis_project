@@ -2012,6 +2012,64 @@ def write_segmentation_sheet(writer, final_output):
     for col in range(2, growth_col + 1):
         ws.column_dimensions[get_column_letter(col)].width = 12
 
+def generate_config_note(ticker, wb):
+    """
+    Add a note in cell B1 of the profit_desc sheet if there are any
+    configuration overrides for the company from financial_data_config.json.
+    
+    Args:
+        ticker (str): Company ticker symbol
+        wb (openpyxl.Workbook): Excel workbook object
+    """
+    import json
+    import logging
+    from pathlib import Path
+
+    logger = logging.getLogger(__name__)
+    
+    # Get the profit_desc sheet
+    try:
+        sheet = wb["Profit.Desc."]
+    except KeyError:
+        logger.warning("profit_desc sheet not found in workbook")
+        return
+    
+    # Load the configuration file
+    try:
+        with open('financial_data_config.json', 'r') as f:
+            config = json.load(f)
+    except FileNotFoundError:
+        logger.warning("financial_data_config.json not found")
+        return
+    except json.JSONDecodeError:
+        logger.warning("Error parsing financial_data_config.json")
+        return
+    
+    # Check if we have any configurations for this ticker
+    ticker_config = config.get(ticker.upper(), {})
+    if not ticker_config:
+        return
+    
+    # Build the configuration note
+    notes = []
+    for statement, fields in ticker_config.items():
+        field_notes = []
+        for field, value in fields.items():
+            field_notes.append(f"set {field} to {value}")
+        if field_notes:
+            notes.append(f"In {statement}, {', '.join(field_notes)}")
+    
+    if notes:
+        note = '. '.join(notes)
+        # Add note to cell B1
+        sheet['A2'] = f"Configuration overrides: {note}."
+        
+        # Style the cell
+        from openpyxl.styles import Font, PatternFill
+        cell = sheet['B1']
+        cell.font = Font(italic=True, size=9, color="666666")
+        cell.fill = PatternFill(start_color="FFFFE0", end_color="FFFFE0", fill_type="solid")
+
 def generate_excel_for_ticker_year(ticker: str, year: int):
     """
     Generate the Excel file for the given ticker and year, writing to:
@@ -2043,6 +2101,7 @@ def generate_excel_for_ticker_year(ticker: str, year: int):
     write_hist_pricing_sheet(writer, final_output)
     write_valuation_sheet(writer, final_output, ticker)
     write_segmentation_sheet(writer, final_output)
+    generate_config_note(ticker, writer.book)
 
     # 4. Apply workbook formatting (remove gridlines, etc.)
     format_workbook(writer)
@@ -2078,6 +2137,7 @@ if __name__ == "__main__":
     write_hist_pricing_sheet(writer, final_output)
     write_valuation_sheet(writer, final_output, ticker)
     write_segmentation_sheet(writer, final_output)
+    generate_config_note(ticker, writer.book)
 
     # Apply formatting: set font to Arial size 10 for non-formatted cells and remove gridlines
     format_workbook(writer)
