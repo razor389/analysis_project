@@ -29,23 +29,15 @@ if not SENDER_EMAIL:
 def load_ticker_config(config_path: str = 'ticker_email_config.json') -> Dict[str, List[str]]:
     """
     Load ticker configuration from JSON file.
-    
-    Format:
-    {
-        "ADYEY": ["ADYYF", "Adyen"],
-        "OTHER": ["Term1", "Term2"]
-    }
+    Returns empty dict if file not found or invalid.
     """
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)
         return config
-    except FileNotFoundError:
-        logging.error(f"Config file not found: {config_path}")
-        sys.exit(1)
-    except json.JSONDecodeError:
-        logging.error(f"Invalid JSON in config file: {config_path}")
-        sys.exit(1)
+    except (FileNotFoundError, json.JSONDecodeError):
+        logging.warning(f"Config file not found or invalid: {config_path}")
+        return {}
 
 def email_to_unix(email_timestamp):
     """
@@ -72,10 +64,9 @@ def initialize_outlook():
 def fetch_sent_emails(namespace):
     """Fetch and return sent emails from Outlook."""
     try:
-        # Use the correct constant for Sent Mail (5 = olFolderSentMail)
         sent_folder = namespace.GetDefaultFolder(5)  # 5 = olFolderSentMail
         messages = sent_folder.Items
-        messages.Sort("[SentOn]", Descending=True)  # Optional: Sort messages by sent date
+        messages.Sort("[SentOn]", Descending=True)
         if messages.Count == 0:
             logging.warning("No messages found in Sent Items folder.")
             return []
@@ -97,13 +88,12 @@ def clean_message(raw_message: str) -> str:
     Cleans the raw email message by removing excessive line breaks,
     email signatures, and other boilerplate text.
     """
-    # Remove email signatures (common patterns)
     signature_patterns = [
-        r'Scott Granowski CFA®, CFP®\s+Academy Capital Management.*',  # Adjust as needed
-        r'Sent via .*',  # Remove lines like "Sent via the Samsung Galaxy..."
-        r'-------- Original message --------.*',  # Remove original message blocks
-        r'From: .*',  # Remove lines starting with From:
-        r'[\r\n]{2,}',  # Replace multiple line breaks with two
+        r'Scott Granowski CFA®, CFP®\s+Academy Capital Management.*',
+        r'Sent via .*',
+        r'-------- Original message --------.*',
+        r'From: .*',
+        r'[\r\n]{2,}',
     ]
     
     cleaned = raw_message
@@ -117,28 +107,16 @@ def clean_message(raw_message: str) -> str:
     # Remove any remaining excessive whitespace
     cleaned = re.sub(r'\s{2,}', ' ', cleaned)
 
-    # Trim leading and trailing whitespace
-    cleaned = cleaned.strip()
-
-    return cleaned
+    return cleaned.strip()
 
 def filter_emails(messages, primary_ticker: str, search_terms: Set[str]) -> List[Dict[str, Any]]:
     """
     Filter emails that contain any of the search terms in the subject line.
-
-    Args:
-        messages: Outlook messages to filter.
-        primary_ticker: The main ticker symbol for output file naming.
-        search_terms: Set of terms to search for (including primary ticker).
-
-    Returns:
-        List of dictionaries containing filtered email data.
     """
     filtered_emails = []
     processed_count = 0
-    seen_emails = set()  # Track unique emails to avoid duplicates
+    seen_emails = set()
 
-    # Create regex patterns for all search terms
     patterns = {term: re.compile(r'\b' + re.escape(term) + r'\b', re.IGNORECASE) 
                for term in search_terms}
 
@@ -149,12 +127,9 @@ def filter_emails(messages, primary_ticker: str, search_terms: Set[str]) -> List
 
             subject = str(message.Subject).strip()
             
-            # Check if any search term appears in the subject
             if any(pattern.search(subject) for pattern in patterns.values()):
                 sent_time = message.SentOn.strftime('%Y-%m-%d %H:%M:%S')
                 unix_timestamp = email_to_unix(sent_time)
-                
-                # Use combination of timestamp and subject as unique identifier
                 email_id = f"{unix_timestamp}_{subject}"
                 
                 if email_id not in seen_emails:
@@ -162,7 +137,6 @@ def filter_emails(messages, primary_ticker: str, search_terms: Set[str]) -> List
                     raw_body = str(message.Body).strip()
                     cleaned_body = clean_message(raw_body)
 
-                    # Log which terms were found
                     found_terms = [term for term, pattern in patterns.items() 
                                  if pattern.search(subject)]
                     logging.info(f"Found terms {found_terms} in email subject: {subject}")
@@ -186,30 +160,20 @@ def filter_emails(messages, primary_ticker: str, search_terms: Set[str]) -> List
 def filter_emails_by_config(ticker: str, config_path: str = 'ticker_email_config.json') -> str:
     """
     Main function to filter sent emails by ticker and its related terms from config.
-
-    Args:
-        ticker: The primary ticker symbol to search for.
-        config_path: Path to the ticker configuration file.
-
-    Returns:
-        The path to the JSON file containing filtered emails.
+    If ticker not in config, searches for just the ticker symbol.
     """
     ticker = ticker.upper()
     
+    # Validate ticker format
+    if not is_valid_search_term(ticker):
+        raise ValueError(f"Invalid ticker format: {ticker}")
+    
     # Load config and get search terms
     config = load_ticker_config(config_path)
-    if ticker not in config:
-        logging.error(f"Ticker {ticker} not found in config file")
-        return ""
     
-    # Create set of all search terms including the primary ticker
-    search_terms = set([ticker] + config[ticker])
+    # Create set of search terms - if ticker not in config, just use the ticker
+    search_terms = set([ticker] + config.get(ticker, []))
     
-    # Validate all search terms
-    for term in search_terms:
-        if not is_valid_search_term(term):
-            raise ValueError(f"Invalid search term: {term}")
-
     logging.info(f"Searching for terms: {search_terms} in Sent Items")
 
     namespace = initialize_outlook()
