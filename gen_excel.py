@@ -716,7 +716,14 @@ def write_profit_desc_sheet(writer, final_output):
         y_cell.fill = label_fill
         y_cell.font = label_font
         y_cell.border = thin_border
+        y_cell.alignment = center_alignment
 
+        # Add hyperlink if filing URL exists for this year
+        filing_url = pdata.get(year, {}).get("filing_url")
+        if filing_url:
+            y_cell.hyperlink = filing_url
+            y_cell.font = Font(name="Times New Roman", size=10, bold=True, italic=True, underline="single", color="0000FF")
+            
     # Step 4: Write Metric Values and Breakdown Values
     for i, year in enumerate(sorted_years):
         year_col = start_col_for_years + i * 2  # Column for the value

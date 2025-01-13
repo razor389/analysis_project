@@ -288,6 +288,8 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         ic = ic_by_year.get(year, {})
         cf = cf_by_year.get(year, {})
 
+        filing_url = bs.get('finalLink')
+
         # Extract relevant financial data
         shares_outstanding = ic.get('weightedAverageShsOut')
         net_profit = ic.get('netIncome')
@@ -378,22 +380,22 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         depreciation_percent = (depreciation / net_profit) if (depreciation and net_profit and net_profit != 0) else None
 
         # p/e low high
-        pe_low = yearly_low / diluted_eps if diluted_eps !=0 else None
-        pe_high = yearly_high / diluted_eps if diluted_eps != 0  else None
+        pe_low = yearly_low / diluted_eps if yearly_low is not None and diluted_eps !=0 else None
+        pe_high = yearly_high / diluted_eps if yearly_high is not None and diluted_eps != 0  else None
 
         # p/b low high
-        pb_low = yearly_low / book_value_per_share if book_value_per_share != 0 else None
-        pb_high = yearly_high / book_value_per_share if book_value_per_share != 0 else None
+        pb_low = yearly_low / book_value_per_share if yearly_low is not None and book_value_per_share != 0 else None
+        pb_high = yearly_high / book_value_per_share if yearly_high is not None and book_value_per_share != 0 else None
 
         # p/s low high
-        ps_low = yearly_low / sales_per_share if sales_per_share !=0 else None
-        ps_high = yearly_high / sales_per_share if sales_per_share != 0 else None
+        ps_low = yearly_low / sales_per_share if yearly_low is not None and sales_per_share !=0 else None
+        ps_high = yearly_high / sales_per_share if yearly_high is not None and sales_per_share != 0 else None
 
         # pcf low high
-        addback_dep_earnings_ps = (net_profit + depreciation) / shares_outstanding if shares_outstanding != 0 else None
+        addback_dep_earnings_ps = (net_profit + depreciation) / shares_outstanding if net_profit is not None and depreciation is not None and shares_outstanding != 0 else None
 
-        pcfs_low = yearly_low / addback_dep_earnings_ps if addback_dep_earnings_ps != 0 else None
-        pcfs_high = yearly_high / addback_dep_earnings_ps if addback_dep_earnings_ps != 0 else None
+        pcfs_low = yearly_low / addback_dep_earnings_ps if yearly_low is not None and addback_dep_earnings_ps != 0 else None
+        pcfs_high = yearly_high / addback_dep_earnings_ps if yearly_high is not None and addback_dep_earnings_ps != 0 else None
 
         year_segments = segmentation_data.get(str(year), {})
 
@@ -463,7 +465,8 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
             "dividend_paid": dividends_paid,
             "dividend_paid_pct_fcf": dividends_paid_pct_fcf,
             "share_buybacks_from_stmt_cf": stmt_cf_share_repurchase,
-            "net_biz_acquisition": net_acquisitions
+            "net_biz_acquisition": net_acquisitions,
+            "filing_url": filing_url
         }
 
         # Directly extract and structure the balance sheet data from 'bs'
