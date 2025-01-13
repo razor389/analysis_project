@@ -13,6 +13,7 @@ from gen_excel import generate_excel_for_ticker_year
 from outlook_ticker_search import filter_emails_by_ticker
 from industry_comp import get_industry_peers_with_stats
 from utils import get_company_profile, get_current_market_cap_yahoo, get_current_quote_yahoo, get_reported_currency, get_yahoo_ticker, get_yearly_high_low_yahoo
+from financial_data_preprocessor import process_financial_statements
 
 # Load the .env file
 load_dotenv()
@@ -251,7 +252,12 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
     ic_data = load_json(f"{symbol}_ic_annual.json")
     cf_data = load_json(f"{symbol}_cf_annual.json")
     basic_data = load_json(f"{symbol}_basic_financials.json")
-
+    ic_data, bs_data, cf_data = process_financial_statements(
+            ticker=symbol,
+            ic_data=ic_data,
+            bs_data=bs_data,
+            cf_data=cf_data
+        )
     # Extract P/E ratios by year from key metrics
     pe_by_year = extract_series_values_by_year(basic_data, 'pe')
     
