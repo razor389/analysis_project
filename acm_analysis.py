@@ -10,7 +10,7 @@ from forum_post_summary import generate_post_summary
 from forum_posts import fetch_all_for_ticker
 from dotenv import load_dotenv
 from gen_excel import generate_excel_for_ticker_year
-from outlook_ticker_search import filter_emails_by_config, filter_emails_by_ticker
+from outlook_ticker_search import filter_emails_by_config
 from industry_comp import get_industry_peers_with_stats
 from utils import get_company_profile, get_current_market_cap_yahoo, get_current_quote_yahoo, get_reported_currency, get_yahoo_ticker, get_yearly_high_low_yahoo
 from financial_data_preprocessor import process_financial_statements
