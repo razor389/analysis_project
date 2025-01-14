@@ -1220,79 +1220,73 @@ def to_float(val):
 def write_qualities_sheet(writer, final_output):
     """
     Create or update a sheet called 'Qualities' that displays the text from
-    final_output['qualities'] with bold formatting for specific segments.
-    Each '\n' in the text forces a new line in the sheet.
-    Within each line, we wrap at ~100 characters. Times New Roman, size 10 font.
+    final_output['qualities'] with:
+    - Numbered items (1-10)
+    - Bold headers inline with numbers
+    - Wrapped descriptive text starting on the next line
+    Each quality is separated by a blank line for readability.
     """
-    # Early return if qualities is None/null
     if not final_output.get("qualities"):
         return
     
     wb = writer.book
 
-    # If the sheet doesn't exist yet, create it
+    # Create sheet if it doesn't exist
     if "Qualities" not in wb.sheetnames:
         wb.create_sheet("Qualities")
     ws = wb["Qualities"]
 
-    # Retrieve the forum summary text
+    # Get the qualities text
     text = final_output.get("qualities", "No summary available.")
 
-    # Optional: set a descriptive title in the first cell
+    # Set title
     ws["A1"] = "Core Analysis"
     ws["A1"].font = Font(name="Times New Roman", size=14, bold=True)
     ws["A1"].fill = label_fill
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
     ws["A1"].border = thin_border
 
-    # Split the text by newlines, so each separate line starts on a new row
-    lines = text.split("\n")
-
-    start_row = 3
+    # Split into individual quality entries (split on numbered items)
+    qualities = re.split(r'\n\n(?=\d+\.)', text.strip())
+    
+    current_row = 3
     col = 1
-    current_row = start_row
 
-    bold_pattern = re.compile(r"\*\*(.*?)\*\*")
-
-    for line in lines:
-        # 1) Trim leading/trailing spaces
-        line = line.strip()
-
-        # 2) Remove a leading dash (e.g. "- " or just "-")
-        #    This regex says: if the line starts with a dash and optional spaces, remove them.
-        line = re.sub(r"^-\s*", "", line)
-
-        # If the line is now empty after removing dash and space, still move down a row
-        if not line:
-            ws.cell(row=current_row, column=col, value="")
-            current_row += 1
+    for quality in qualities:
+        if not quality.strip():
             continue
-
-        # Word-wrap the line at ~100 characters while preserving bold formatting
-        segments = []
-        last_index = 0
-
-        # Find all bold segments (those surrounded by **)
-        for match in bold_pattern.finditer(line):
-            start, end = match.span()
-            if last_index < start:
-                # Add text before the bold part
-                segments.append((line[last_index:start], False))
-            # Add the bold part
-            segments.append((match.group(1), True))
-            last_index = end
-
-        # Add any text after the last bold segment
-        if last_index < len(line):
-            segments.append((line[last_index:], False))
-
-        # Now write the segments into the Excel sheet
-        for segment, is_bold in segments:
-            wrapped_lines = textwrap.wrap(segment, width=100)
-            for wrapped_segment in wrapped_lines:
-                cell = ws.cell(row=current_row, column=col, value=wrapped_segment)
-                cell.font = Font(name="Arial", size=10, bold=is_bold)
+            
+        # Extract the number, header, and description
+        # Pattern matches: number, bold header, and description
+        match = re.match(r'(\d+)\.\s*\*\*(.*?)\*\*:(.+)', quality.strip(), re.DOTALL)
+        
+        if match:
+            number, header, description = match.groups()
+            
+            # Write the numbered header line
+            header_cell = ws.cell(row=current_row, column=col)
+            header_cell.value = f"{number}. {header}:"
+            header_cell.font = Font(name="Arial", size=10, bold=True)
+            current_row += 1
+            
+            # Write the wrapped description on subsequent lines
+            description = description.strip()
+            wrapped_lines = textwrap.wrap(description, width=100)
+            
+            for line in wrapped_lines:
+                desc_cell = ws.cell(row=current_row, column=col)
+                desc_cell.value = line
+                desc_cell.font = Font(name="Arial", size=10)
                 current_row += 1
+            
+            # Add a blank line between qualities
+            current_row += 1
+
+    # Set column width
+    ws.column_dimensions[get_column_letter(col)].width = 110
+
+    # Remove gridlines
+    ws.sheet_view.showGridLines = False
 
     # Optionally set column width so text fits nicely
     ws.column_dimensions[get_column_letter(col)].width = 110
