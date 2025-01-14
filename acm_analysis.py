@@ -6,7 +6,7 @@ import os
 import sys
 import requests
 import datetime
-from forum_post_summary import generate_post_summary
+from anthropic_summarizer import generate_post_summary
 from forum_posts import fetch_all_for_ticker
 from dotenv import load_dotenv
 from gen_excel import generate_excel_for_ticker_year
@@ -1191,6 +1191,7 @@ def process_qualities(symbol, ignore_qualities=False, debug=False):
             if combined_data:
                 # Call your existing generate_post_summary() function
                 print(f"Attempting to generate post summaries for {symbol}")
+                # Sort posts by timestamp (most recent first)
                 return generate_post_summary(combined_data, symbol)
             else:
                 print(f"No posts or emails found for {symbol}. Skipping summary.")
