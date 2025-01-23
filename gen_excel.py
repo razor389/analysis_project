@@ -274,18 +274,18 @@ def write_company_description(writer, final_output):
     # Updated number formats according to specifications
     number_formats = {
         "net_profit": '#,##0',          # Millions with commas, no $ no M
-        "diluted_eps": '$#,##0.00',     # Dollars and cents
-        "operating_eps": '$#,##0.00',    # Dollars and cents
+        "diluted_eps": '#,##0.00',     # Dollars and cents
+        "operating_eps": '#,##0.00',    # Dollars and cents
         "pe_ratio": '#,##0.0',          # One decimal place
         "price_low": '#,##0.0',         # One decimal place
         "price_high": '#,##0.0',        # One decimal place
         "dividends_paid": '#,##0',      # Millions with commas, no $ no M
-        "dividends_per_share": '$#,##0.00',  # Dollars and cents
+        "dividends_per_share": '#,##0.00',  # Dollars and cents
         "avg_dividend_yield": '0.00%',   # Percentage with two decimal places
         "shares_outstanding": '#,##0',   # Millions with commas, no $ no M
         "buyback": '#,##0',             # Millions with commas, no $ no M
         "share_equity": '#,##0',        # Millions with commas, no $ no M
-        "book_value_per_share": '$#,##0.00',  # Dollars and cents
+        "book_value_per_share": '#,##0.00',  # Dollars and cents
         "long_term_debt": '#,##0',      # Millions with commas, no $ no M
         "roe": '0.0%',                  # Percentage with one decimal place
         "roc": '0.0%'                   # Percentage with one decimal place
@@ -493,7 +493,7 @@ def write_analyses_sheet(writer, final_output):
     # Define the formatting rules for each metric
     number_formats = {
         "revenues": '#,##0',  # Millions with commas
-        "sales_per_share": '$#,##0.00',  # Dollars and cents
+        "sales_per_share": '#,##0.00',  # Dollars and cents
         "op_margin_percent": '0.0%',  # Percentage with one decimal place
         "tax_rate": '0.0%',  # Percentage with one decimal place
         "depreciation": '#,##0',  # Millions with commas
@@ -1640,7 +1640,7 @@ def write_valuation_sheet(writer, final_output, ticker):
     #   F5 => PE Multiple
     # =========================================================================
     settings = {
-        (3, 2): ("ADR:ORD:", 1),                           # B3
+        (3, 2): ("ORD:ADR:", 1),                           # B3
         (4, 2): (f"USD:{reported_currency} rate:", 1),          # B4
         (3, 4): ("EPS growth rate:", 0.10),                     # D3
         (4, 4): ("Dividend growth rate:", 0.10),                # D4
