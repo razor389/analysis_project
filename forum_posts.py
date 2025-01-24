@@ -78,7 +78,7 @@ def get_posts_for_topic(topic_id):
     response.raise_for_status()
     return response.json()
 
-def fetch_all_for_ticker(ticker):
+def fetch_all_for_ticker(input_ticker):
     """
     1) Find the parent category for 'ticker'
     2) Gather all subcategories
@@ -86,6 +86,10 @@ def fetch_all_for_ticker(ticker):
     4) Collect all posts, remove duplicates
     5) Clean HTML from each post, sort by timestamp, save to {ticker}_posts.json
     """
+
+    config = load_ticker_config()
+    ticker = get_search_ticker(input_ticker, config)
+
     # Get all categories up front
     all_categories = get_categories()
     cat_list = all_categories.get("data", [])
@@ -166,6 +170,23 @@ def fetch_all_for_ticker(ticker):
 
     print(f"Saved {len(simplified_posts)} posts to '{json_filename}'.")
 
+def load_ticker_config():
+    """Load ticker mapping configuration if it exists."""
+    try:
+        with open('forum_search_config.json', 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+def get_search_ticker(input_ticker, config):
+    """Get the actual ticker to search for based on config mapping."""
+    search_ticker = config.get(input_ticker)
+    if search_ticker:
+        print(f"Found mapping: using '{search_ticker}' instead of '{input_ticker}'")
+    else:
+        print(f"No mapping found: using provided ticker '{input_ticker}'")
+        search_ticker = input_ticker
+    return search_ticker
 
 if __name__ == "__main__":
     import sys
