@@ -136,6 +136,24 @@ def calculate_statistics(ticker, financial_data):
     except Exception as e:
         logger.error(f"Error calculating statistics for {ticker}: {str(e)}", exc_info=True)
         return None
+    
+def check_adr_mapping(ticker, peers, adr_mapping):
+    """
+    Check if any peer tickers map to the same ordinary shares as the input ticker.
+    Remove duplicates, keeping the ADR ticker when found.
+    """
+    # Create reverse mapping from ordinary to ADR
+    ord_to_adr = {v: k for k, v in adr_mapping.items()}
+    
+    filtered_peers = []
+    for peer in peers:
+        # Skip if peer is ordinary share and we have its ADR
+        if peer in ord_to_adr and ord_to_adr[peer] == ticker:
+            continue
+        # Keep peer if it's not related to input ticker
+        filtered_peers.append(peer)
+    
+    return filtered_peers
 
 def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file=False):
     """Get industry peers and calculate statistics for all companies."""
@@ -144,6 +162,10 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file=False):
     if not api_key:
         logger.error("API key not found")
         raise ValueError("API key not found")
+    
+    # Load ADR mapping
+    with open('adr_to_ord_mapping.json', 'r') as f:
+        adr_mapping = json.load(f)
     
     # First get company industry
     profile_url = f"https://financialmodelingprep.com/api/v3/profile/{ticker}"
@@ -190,7 +212,9 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file=False):
             seen_names.add(stock_name)
     
     top_peers = [stock['symbol'] for stock in unique_results[:num_comps]]
-    logger.info(f"Selected peers: {', '.join(top_peers)}")
+    # Check for and remove duplicate ordinary/ADR pairs
+    top_peers = check_adr_mapping(ticker, top_peers, adr_mapping)
+    logger.info(f"Selected peers after ADR check: {', '.join(top_peers)}")
     
     all_tickers = [ticker] + top_peers
     result = {

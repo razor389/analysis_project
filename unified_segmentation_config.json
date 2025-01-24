@@ -133,5 +133,153 @@
                 "msft:MorePersonalComputingMember": "More Personal Computing"
             }
         }
+    },
+    "LVMUY": {
+        "manual_data": {
+            "2022": {
+                "revenue": {
+                    "Wines & Spirits": 7099000000,
+                    "Fashion & Leather Goods": 38648000000,
+                    "Perfumes & Cosmetics": 7722000000,
+                    "Watches & Jewelry": 10581000000,
+                    "Selective Retailing": 14852000000
+                }
+            },
+            "2021": {
+                "revenue": {
+                    "Wines & Spirits": 5974000000,
+                    "Fashion & Leather Goods": 30896000000,
+                    "Perfumes & Cosmetics": 6608000000,
+                    "Watches & Jewelry": 8964000000,
+                    "Selective Retailing": 11754000000
+                }
+            },
+            "2020": {
+                "revenue": {
+                    "Wines & Spirits": 4755000000,
+                    "Fashion & Leather Goods": 21207000000,
+                    "Perfumes & Cosmetics": 5248000000,
+                    "Watches & Jewelry": 3356000000,
+                    "Selective Retailing": 10155000000
+                }
+            },
+            "2019": {
+                "revenue": {
+                    "Wines & Spirits": 5576000000,
+                    "Fashion & Leather Goods": 22237000000,
+                    "Perfumes & Cosmetics": 6835000000,
+                    "Watches & Jewelry": 4405000000,
+                    "Selective Retailing": 14791000000
+                }
+            },
+            "2018": {
+                "revenue": {
+                    "Wines & Spirits": 5143000000,
+                    "Fashion & Leather Goods": 18455000000,
+                    "Perfumes & Cosmetics": 6092000000,
+                    "Watches & Jewelry": 4123000000,
+                    "Selective Retailing": 13646000000
+                }
+            },
+            "2017": {
+                "revenue": {
+                    "Wines & Spirits": 5084000000,
+                    "Fashion & Leather Goods": 15472000000,
+                    "Perfumes & Cosmetics": 5560000000,
+                    "Watches & Jewelry": 3805000000,
+                    "Selective Retailing": 13311000000
+                }
+            },
+            "2016": {
+                "revenue": {
+                    "Wines & Spirits": 4835000000,
+                    "Fashion & Leather Goods": 12775000000,
+                    "Perfumes & Cosmetics": 4953000000,
+                    "Watches & Jewelry": 3468000000,
+                    "Selective Retailing": 11973000000
+                }
+            },
+            "2015": {
+                "revenue": {
+                    "Wines & Spirits": 4603000000,
+                    "Fashion & Leather Goods": 12369000000,
+                    "Perfumes & Cosmetics": 4671000000,
+                    "Watches & Jewelry": 3308000000,
+                    "Selective Retailing": 11193000000
+                }
+            },
+            "2014": {
+                "revenue": {
+                    "Wines & Spirits": 3973000000,
+                    "Fashion & Leather Goods": 10828000000,
+                    "Perfumes & Cosmetics": 3916000000,
+                    "Watches & Jewelry": 2782000000,
+                    "Selective Retailing": 9534000000
+                }
+            },
+            "2013": {
+                "revenue": {
+                    "Wines & Spirits": 4187000000,
+                    "Fashion & Leather Goods": 9882000000,
+                    "Perfumes & Cosmetics": 3717000000,
+                    "Watches & Jewelry": 2784000000,
+                    "Selective Retailing": 8938000000
+                }
+            },
+            "2012": {
+                "revenue": {
+                    "Wines & Spirits": 4137000000,
+                    "Fashion & Leather Goods": 9926000000,
+                    "Perfumes & Cosmetics": 3613000000,
+                    "Watches & Jewelry": 2836000000,
+                    "Selective Retailing": 7879000000
+                }
+            },
+            "2011": {
+                "revenue": {
+                    "Wines & Spirits": 3524000000,
+                    "Fashion & Leather Goods": 8712000000,
+                    "Perfumes & Cosmetics": 3195000000,
+                    "Watches & Jewelry": 1949000000,
+                    "Selective Retailing": 6436000000
+                }
+            },
+            "2010": {
+                "revenue": {
+                    "Wines & Spirits": 3261000000,
+                    "Fashion & Leather Goods": 7581000000,
+                    "Perfumes & Cosmetics": 3076000000,
+                    "Watches & Jewelry": 985000000,
+                    "Selective Retailing": 5378000000
+                }
+            },
+            "2009": {
+                "revenue": {
+                    "Wines & Spirits": 2740000000,
+                    "Fashion & Leather Goods": 6302000000,
+                    "Perfumes & Cosmetics": 2741000000,
+                    "Watches & Jewelry": 764000000,
+                    "Selective Retailing": 4533000000
+                }
+            },
+            "2008": {
+                "revenue": {
+                    "Wines & Spirits": 3126000000,
+                    "Fashion & Leather Goods": 6010000000,
+                    "Perfumes & Cosmetics": 2868000000,
+                    "Watches & Jewelry": 879000000,
+                    "Selective Retailing": 4376000000
+                }
+            },
+            "2007": {
+                "revenue": {
+                    "Wines & Spirits": 3226000000,
+                    "Fashion & Leather Goods": 5628000000,
+                    "Perfumes & Cosmetics": 2731000000,
+                    "Watches & Jewelry": 833000000,
+                    "Selective Retailing": 4179000000
+                }
+            }
+        }
     }
 }

@@ -425,9 +425,37 @@ def transform_facts(raw_facts: List[Dict], name_mapping: Dict[str, str]) -> Dict
     
     return transformed
 
+def handle_manual_segmentation(config: dict) -> dict:
+    """
+    Process manual segmentation data from config.
+    Returns data in the same structure as process_years.
+    """
+    manual_data = config.get('manual_data', {})
+    if not manual_data:
+        return {}
+        
+    result = {}
+    for year, year_data in manual_data.items():
+        metrics = {}
+        for metric_name, metric_data in year_data.items():
+            # Handle both direct values and mappings
+            if isinstance(metric_data, dict):
+                metrics[metric_name] = metric_data
+            else:
+                # If it's a direct value list/object, wrap it
+                metrics[metric_name] = {"values": metric_data}
+                
+        result[str(year)] = metrics
+        
+    return result
+
 def process_years(ticker: str, end_year: int, raw_output: bool = False, debug: bool = False) -> Dict:
     """Process multiple years of data with support for raw and transformed output."""
     config = load_config(ticker)
+    
+    # Check if this ticker has manual data
+    if config.get('manual_data'):
+        return handle_manual_segmentation(config)
     
     result = {}
     
