@@ -5,6 +5,12 @@
             "axes": ["Product Or Service Axis"]
         }
     },
+    "AMZN": {
+        "revenue": {
+            "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "axes": ["Product Or Service Axis"]
+        }
+    },
     "MSFT": {
         "revenue": {
             "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
