@@ -431,7 +431,7 @@ def extract_segment_data(ticker: str, year: int, metric_config: Dict, debug: boo
     
     logger.info(f"Filing URL: {filing_url}")
     facts = extract_inline_xbrl_data(filing_url, tag)
-    
+
     logger.info(f"Extracted {len(facts)} facts for tag {tag}")
     if facts and debug:
         logger.debug("Sample fact structure:")

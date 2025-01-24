@@ -28,7 +28,7 @@
                 "amzn:OnlineStoresMember": "Online Stores",
                 "amzn:PhysicalStoresMember": "Physical Stores",
                 "amzn:ThirdPartySellerServicesMember": "Third Party Seller Services",
-                "us-gaap:AdvertisingMemberr": "Advertising",
+                "us-gaap:AdvertisingMember": "Advertising",
                 "amzn:SubscriptionServicesMember": "Subscription Services",
                 "amzn:AmazonWebServicesMember": "AWS",
                 "amzn:OtherServicesMember": "Other Services"
