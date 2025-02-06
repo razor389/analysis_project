@@ -195,6 +195,8 @@ class InsuranceMetricsExtractor:
             "losses_and_expenses": "us-gaap:IncurredClaimsPropertyCasualtyAndLiability",
             "acquisition_costs": "us-gaap:DeferredPolicyAcquisitionCostAmortizationExpense",
             "underwriting_expenses": "us-gaap:OtherUnderwritingExpense",
+            "assets": "us-gaap:LiabilitiesAndStockholdersEquity",
+            "cash": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
         }
 
     def parse_context(self, soup, context_ref):

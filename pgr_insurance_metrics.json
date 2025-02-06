@@ -1,0 +1,67 @@
+{
+  "2023": {
+    "gross_revenues": 58664400000.0,
+    "investment_income": 1891800000.0,
+    "losses_and_expenses": 45654600000.0,
+    "acquisition_costs": 4665100000.0,
+    "underwriting_expenses": 6241500000.0,
+    "assets": 88690800000.0,
+    "cash": 99600000.0
+  },
+  "2022": {
+    "gross_revenues": 49241200000.0,
+    "investment_income": 1260300000.0,
+    "losses_and_expenses": 38122700000.0,
+    "acquisition_costs": 3917000000.0,
+    "underwriting_expenses": 5859600000.0,
+    "assets": 75465000000.0,
+    "cash": 220900000.0
+  },
+  "2021": {
+    "gross_revenues": 44368700000.0,
+    "investment_income": 860900000.0,
+    "losses_and_expenses": 33627600000.0,
+    "acquisition_costs": 3712800000.0,
+    "underwriting_expenses": 5654700000.0,
+    "cash": 202100000.0,
+    "assets": 71132300000.0
+  },
+  "2020": {
+    "cash": 76500000.0,
+    "gross_revenues": 39261600000.0,
+    "investment_income": 936600000.0,
+    "losses_and_expenses": 25121800000.0,
+    "acquisition_costs": 3273200000.0,
+    "underwriting_expenses": 5570000000.0,
+    "assets": 64098300000.0
+  },
+  "2019": {
+    "cash": 227400000.0,
+    "gross_revenues": 36192400000.0,
+    "investment_income": 1042000000.0,
+    "losses_and_expenses": 25470500000.0,
+    "acquisition_costs": 3023200000.0,
+    "underwriting_expenses": 4975100000.0,
+    "assets": 54895300000.0
+  },
+  "2018": {
+    "cash": 75000000.0,
+    "gross_revenues": 30933300000.0,
+    "investment_income": 820500000.0,
+    "losses_and_expenses": 21721000000.0,
+    "acquisition_costs": 2573700000.0,
+    "underwriting_expenses": 4195800000.0,
+    "assets": 46575000000.0
+  },
+  "2017": {
+    "gross_revenues": 25729900000.0,
+    "investment_income": 563100000.0,
+    "losses_and_expenses": 18808000000.0,
+    "acquisition_costs": 2124900000.0,
+    "underwriting_expenses": 3480700000.0,
+    "cash": 275300000.0
+  },
+  "2016": {
+    "cash": 226400000.0
+  }
+}
