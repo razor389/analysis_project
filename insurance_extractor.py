@@ -107,9 +107,7 @@ class EDGARExhibit13Finder:
             filing_date = ""
             id_elem = entry.find("atom:id", ns)
             if id_elem is not None and id_elem.text:
-                accession_match = re.search(
-                    r"accession-number=(\d{10}-\d{2}-\d{6})", id_elem.text
-                )
+                accession_match = re.search(r"accession-number=(\d{10}-\d{2}-\d{6})", id_elem.text)
                 if accession_match:
                     accession_number = accession_match.group(1)
             date_elem = entry.find("atom:updated", ns)
@@ -121,21 +119,19 @@ class EDGARExhibit13Finder:
                 if href:
                     filing_href = urljoin(self.BASE_URL, href)
             if accession_number and filing_href:
-                entries.append(
-                    {
-                        "accession_number": accession_number,
-                        "filing_href": filing_href,
-                        "filing_date": filing_date,
-                    }
-                )
+                entries.append({
+                    "accession_number": accession_number,
+                    "filing_href": filing_href,
+                    "filing_date": filing_date,
+                })
         return {"filings": entries}
 
     def get_filing_detail(self, filing_url: str) -> dict:
         """
         Retrieves the filing detail (index) page and locates the XML filing document.
-        It looks through the table rows for one whose description contains keywords
-        like "extracted", "instance document", and "xbrl" (case-insensitive). If not found,
-        it falls back to a CSS selector.
+        It scans table rows for one whose description contains keywords such as
+        "extracted", "instance document", and "xbrl" (case-insensitive). Falls back
+        to a CSS selector.
         """
         response = self.session.get(filing_url, headers=self.headers, timeout=(10, 30))
         response.raise_for_status()
@@ -149,11 +145,9 @@ class EDGARExhibit13Finder:
                     description = cells[1].get_text(strip=True)
                     logger.debug(f"Row description: {description}")
                     desc_lower = description.lower()
-                    if (
-                        "extracted" in desc_lower
-                        and "instance document" in desc_lower
-                        and "xbrl" in desc_lower
-                    ):
+                    if ("extracted" in desc_lower and
+                        "instance document" in desc_lower and
+                        "xbrl" in desc_lower):
                         document_link = cells[2].find("a")
                         if document_link:
                             href = document_link.get("href")
@@ -165,15 +159,15 @@ class EDGARExhibit13Finder:
             if xml_link:
                 documents["xml"] = urljoin(self.BASE_URL, xml_link.get("href"))
         if not documents["xml"]:
-            logger.warning(
-                f"No XML filing document found in filing page: {filing_url}"
-            )
+            logger.warning(f"No XML filing document found in filing page: {filing_url}")
         return documents
 
 class InsuranceMetricsExtractor:
     """
     Extracts metrics from an XML filing that contains inline XBRL facts and context definitions.
-    This version uses the XML parser.
+    The results are organized per year into two sections: "profit_desc" and "balance_sheet".
+    The balance_sheet section is further divided into "assets", "liabilities", and
+    "shareholders_equity" subsections.
     """
     def __init__(self, user_agent: str):
         self.headers = {
@@ -189,14 +183,82 @@ class InsuranceMetricsExtractor:
         )
         adapter = requests.adapters.HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("https://", adapter)
-        self.metrics = {
+        # Profit & loss metrics (profit_desc)
+        self.profit_desc_metrics = {
             "gross_revenues": "us-gaap:PremiumsEarnedNetPropertyAndCasualty",
             "investment_income": "us-gaap:InterestAndDividendIncomeOperating",
             "losses_and_expenses": "us-gaap:IncurredClaimsPropertyCasualtyAndLiability",
             "acquisition_costs": "us-gaap:DeferredPolicyAcquisitionCostAmortizationExpense",
-            "underwriting_expenses": "us-gaap:OtherUnderwritingExpense",
-            "assets": "us-gaap:LiabilitiesAndStockholdersEquity",
+            "underwriting_expenses": "us-gaap:OtherUnderwritingExpense"
+        }
+        # Balance sheet metrics
+        self.balance_sheet_metrics = {
+            "assets": "us-gaap:Assets",
             "cash": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+            "fixed_income": "pgr:DebtSecuritiesAvailableforsaleFixedMaturities",
+            "preferred_stocks": "pgr:EquitySecuritiesFVNINonredeemablePreferredStock",
+            "common_equities": "pgr:EquitySecuritiesFVNICommonEquities",
+            "short_term": "us-gaap:ShortTermInvestments",
+            "accrued_investment_income": "us-gaap:AccruedInvestmentIncomeReceivable",
+            "premiums_receivable": "us-gaap:PremiumsReceivableAtCarryingValue",
+            "reinsurance_recoverables": "us-gaap:ReinsuranceRecoverables",
+            "prepaid_reinsurance_premiums": "us-gaap:PrepaidReinsurancePremiums",
+            "deferred_acquisition_costs": "us-gaap:DeferredPolicyAcquisitionCosts",
+            "income_taxes": "us-gaap:DeferredTaxAssetsLiabilitiesNet",
+            "property_and_equipment": "us-gaap:PropertyPlantAndEquipmentNet",
+            "goodwill": "us-gaap:Goodwill",
+            "intangibles": "us-gaap:IntangibleAssetsNetExcludingGoodwill",
+            "other_assets": "us-gaap:OtherAssets",
+            "liabilities": "us-gaap:Liabilities",
+            "unearned_premiums": "us-gaap:UnearnedPremiums",
+            "loss_reserves": "us-gaap:LiabilityForClaimsAndClaimsAdjustmentExpense",
+            "accounts_payable": "us-gaap:AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent",
+            "income_taxes_liabilities": "us-gaap:DeferredTaxLiabilities",
+            "debt": "us-gaap:DebtLongtermAndShorttermCombinedAmount",
+            "shareholders_equity": "us-gaap:StockholdersEquity",
+            "common_stock": "us-gaap:CommonStockValueOutstanding",
+            "additional_capital": "us-gaap:AdditionalPaidInCapitalCommonStock",
+            "unamortized_restricted_stock": "us-gaap:PreferredStockValueOutstanding",
+            "unrealized_net_capital_gains_losses": "us-gaap:AccumulatedOtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax",
+            "hedges": "us-gaap:AccumulatedOtherComprehensiveIncomeLossCumulativeChangesInNetGainLossFromCashFlowHedgesEffectNetOfTax",
+            "foreign_currency_translation": "pgr:AccumulatedOtherComprehensiveIncomeLossAttributableToNoncontrollingInterestNetOfTax",
+            "retained_earnings": "us-gaap:RetainedEarningsAccumulatedDeficit"
+        }
+        # Map each balance sheet metric to a subsection.
+        self.balance_sheet_mapping = {
+            # Assets subsection
+            "assets": "assets",
+            "cash": "assets",
+            "fixed_income": "assets",
+            "preferred_stocks": "assets",
+            "common_equities": "assets",
+            "short_term": "assets",
+            "accrued_investment_income": "assets",
+            "premiums_receivable": "assets",
+            "reinsurance_recoverables": "assets",
+            "prepaid_reinsurance_premiums": "assets",
+            "deferred_acquisition_costs": "assets",
+            "income_taxes": "assets",
+            "property_and_equipment": "assets",
+            "goodwill": "assets",
+            "intangibles": "assets",
+            "other_assets": "assets",
+            # Liabilities subsection
+            "liabilities": "liabilities",
+            "unearned_premiums": "liabilities",
+            "loss_reserves": "liabilities",
+            "accounts_payable": "liabilities",
+            "income_taxes_liabilities": "liabilities",
+            "debt": "liabilities",
+            # Shareholders' Equity subsection
+            "shareholders_equity": "shareholders_equity",
+            "common_stock": "shareholders_equity",
+            "additional_capital": "shareholders_equity",
+            "unamortized_restricted_stock": "shareholders_equity",
+            "unrealized_net_capital_gains_losses": "shareholders_equity",
+            "hedges": "shareholders_equity",
+            "foreign_currency_translation": "shareholders_equity",
+            "retained_earnings": "shareholders_equity",
         }
 
     def parse_context(self, soup, context_ref):
@@ -213,14 +275,11 @@ class InsuranceMetricsExtractor:
                 end = period_elem.find("endDate")
                 instant = period_elem.find("instant")
                 if start and end:
-                    logger.debug(
-                        f"Found period: {start.text.strip()} to {end.text.strip()}"
-                    )
+                    logger.debug(f"Found period: {start.text.strip()} to {end.text.strip()}")
                     return {"period": f"{start.text.strip()} to {end.text.strip()}"}
                 elif instant:
                     logger.debug(f"Found instant: {instant.text.strip()}")
                     return {"period": f"As of {instant.text.strip()}"}
-        # Fallback using the helper
         context = find_context(soup, context_ref)
         if context:
             period_elem = context.find("period")
@@ -229,14 +288,11 @@ class InsuranceMetricsExtractor:
                 end = period_elem.find("endDate")
                 instant = period_elem.find("instant")
                 if start and end:
-                    logger.debug(
-                        f"Found period: {start.text.strip()} to {end.text.strip()}"
-                    )
+                    logger.debug(f"Found period: {start.text.strip()} to {end.text.strip()}")
                     return {"period": f"{start.text.strip()} to {end.text.strip()}"}
                 elif instant:
                     logger.debug(f"Found instant: {instant.text.strip()}")
                     return {"period": f"As of {instant.text.strip()}"}
-        # Fallback: extract a year from context_ref itself.
         year_pattern = r"(\d{4})"
         year_match = re.search(year_pattern, context_ref)
         if year_match:
@@ -248,69 +304,85 @@ class InsuranceMetricsExtractor:
 
     def extract_metrics(self, xml_url: str) -> dict:
         """
-        Retrieves the XML filing from xml_url, saves a debug copy,
-        parses it using the lxml-xml parser, and extracts the desired metrics.
+        Retrieves the XML filing from xml_url, retrying a few times if a timeout occurs,
+        then parses it using the lxml-xml parser and extracts the desired metrics into two groups:
+        profit_desc and balance_sheet (the latter is subdivided).
         """
-        content, meta_info = get_filing_contents(xml_url)
+        max_retries = 3
+        attempt = 0
+        content = None
+        while attempt < max_retries:
+            try:
+                logger.info("Fetching filing data...")
+                content, meta_info = get_filing_contents(xml_url)
+                if content:
+                    break
+            except requests.exceptions.Timeout as e:
+                attempt += 1
+                logger.error(f"Timeout error fetching filing data (attempt {attempt}/{max_retries}): {e}")
+                time.sleep(5)  # wait 5 seconds before retrying
         if not content:
-            logger.error("No filing content retrieved.")
+            logger.error("No filing content retrieved after maximum retries.")
             return {}
-        
-        # with open("debug_filing.xml", "w", encoding="utf-8") as f:
-        #     f.write(content)
-        # logger.info("Saved raw filing XML to debug_filing.xml")
         
         logger.info("Parsing document using lxml-xml parser...")
         soup = BeautifulSoup(content, "lxml-xml")
+        # Initialize a results dictionary.
         results = {}
         
-        for metric_name, metric_tag in self.metrics.items():
-            logger.info(f"Processing metric: {metric_name} (tag: {metric_tag})")
-            # Here we search for elements by tag name.
-            xbrl_elements = soup.find_all(metric_tag)
-            logger.info(f"Found {len(xbrl_elements)} elements for metric '{metric_name}'")
-            
-            for elem in xbrl_elements:
-                raw_value = elem.get_text(strip=True)
-                logger.debug(f"Raw value for {metric_name}: '{raw_value}'")
-                try:
-                    # Since the value is now plain (no commas, parentheses, etc.), we simply convert.
-                    numeric_value = float(raw_value)
-                    
-                    scale = elem.get("scale", "0")
-                    if scale and scale != "0":
-                        numeric_value *= 10 ** int(scale)
-                    logger.debug(f"Final numeric value: {numeric_value}")
-                    
-                    context_ref = elem.get("contextRef") or elem.get("contextref")
-                    if not context_ref:
-                        logger.debug("No context reference found")
+        # Helper function to process a mapping of metrics.
+        def process_mapping(mapping):
+            local = {}
+            for metric_name, tag in mapping.items():
+                elems = soup.find_all(tag)
+                for elem in elems:
+                    try:
+                        numeric_value = float(elem.get_text(strip=True))
+                        scale = elem.get("scale", "0")
+                        if scale and scale != "0":
+                            numeric_value *= 10 ** int(scale)
+                        context_ref = elem.get("contextRef") or elem.get("contextref")
+                        if not context_ref:
+                            continue
+                        context_data = self.parse_context(soup, context_ref)
+                        period_text = context_data.get("period", "")
+                        if not period_text:
+                            continue
+                        year_match = re.search(r"(\d{4})", period_text)
+                        if not year_match:
+                            continue
+                        year = year_match.group(1)
+                        if year not in local:
+                            local[year] = {}
+                        local[year][metric_name] = numeric_value
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Error processing {metric_name}: {e}")
                         continue
-                    logger.debug(f"Found contextRef: {context_ref}")
-                    
-                    context_data = self.parse_context(soup, context_ref)
-                    logger.debug(f"Context data for {context_ref}: {context_data}")
-                    period_text = context_data.get("period", "")
-                    if not period_text:
-                        logger.debug("No period text found")
-                        continue
-                    
-                    # Extract the year from the startDate of the period.
-                    # We assume the startDate is in the format YYYY-MM-DD.
-                    year_match = re.search(r"(\d{4})", period_text)
-                    if not year_match:
-                        logger.debug(f"No year found in period text: {period_text}")
-                        continue
-                    year = year_match.group(1)
-                    
-                    if year not in results:
-                        results[year] = {}
-                    results[year][metric_name] = numeric_value
-                    logger.debug(f"Stored {metric_name} = {numeric_value} for year {year}")
-                except (ValueError, TypeError) as e:
-                    logger.error(f"Error processing value for {metric_name}: {e}")
-                    continue
+            return local
         
+        # Process profit_desc metrics.
+        profit_data = process_mapping(self.profit_desc_metrics)
+        # Process balance_sheet metrics.
+        balance_data = process_mapping(self.balance_sheet_metrics)
+        
+        # Combine the two sets into our final results per year.
+        years = set(profit_data.keys()) | set(balance_data.keys())
+        for year in years:
+            results[year] = {
+                "profit_desc": profit_data.get(year, {}),
+                "balance_sheet": {
+                    "assets": {},
+                    "liabilities": {},
+                    "shareholders_equity": {}
+                }
+            }
+            if year in balance_data:
+                for metric_name, value in balance_data[year].items():
+                    subsection = self.balance_sheet_mapping.get(metric_name)
+                    if subsection:
+                        results[year]["balance_sheet"][subsection][metric_name] = value
+                    else:
+                        results[year]["balance_sheet"][metric_name] = value
         logger.info(f"Final extracted results: {results}")
         return results
 
@@ -343,14 +415,18 @@ def main():
             if xml_url:
                 logger.info(f"Processing XML filing from filing dated {filing['filing_date']}")
                 year_results = extractor.extract_metrics(xml_url)
-                for year, metrics in year_results.items():
+                for year, data in year_results.items():
                     if year not in all_results:
-                        all_results[year] = {}
-                    all_results[year].update(metrics)
+                        all_results[year] = data
+                    else:
+                        all_results[year]["profit_desc"].update(data.get("profit_desc", {}))
+                        for subsec, subdata in data.get("balance_sheet", {}).items():
+                            if subsec not in all_results[year]["balance_sheet"]:
+                                all_results[year]["balance_sheet"][subsec] = subdata
+                            else:
+                                all_results[year]["balance_sheet"][subsec].update(subdata)
             else:
-                logger.warning(
-                    f"XML filing document not found for filing dated {filing['filing_date']}"
-                )
+                logger.warning(f"XML filing document not found for filing dated {filing['filing_date']}")
             time.sleep(0.1)
         
         ordered_results = dict(sorted(all_results.items(), reverse=True))
