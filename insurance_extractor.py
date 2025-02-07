@@ -189,7 +189,10 @@ class InsuranceMetricsExtractor:
             "investment_income": "us-gaap:InterestAndDividendIncomeOperating",
             "losses_and_expenses": "us-gaap:IncurredClaimsPropertyCasualtyAndLiability",
             "acquisition_costs": "us-gaap:DeferredPolicyAcquisitionCostAmortizationExpense",
-            "underwriting_expenses": "us-gaap:OtherUnderwritingExpense"
+            "underwriting_expenses": "us-gaap:OtherUnderwritingExpense",
+            "taxes": "us-gaap:IncomeTaxExpenseBenefit",
+            "interest_expenses": "us-gaap:InterestExpenseDebt",
+            "service_expenses": "pgr:NonInsuranceServiceExpenses"
         }
         # Balance sheet metrics
         self.balance_sheet_metrics = {
