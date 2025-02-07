@@ -32,7 +32,7 @@ logger.setLevel(logging.INFO)
 
 def find_context(soup, context_ref):
     """
-    Fallback helper: returns a tag whose id equals context_ref and whose name
+    Fallback helper: returns a tag whose id equals context_ref and whose tag name
     (lowercased) contains 'context'.
     """
     return soup.find(lambda tag: tag.get("id") == context_ref and "context" in tag.name.lower())
@@ -165,9 +165,9 @@ class EDGARExhibit13Finder:
 class InsuranceMetricsExtractor:
     """
     Extracts metrics from an XML filing that contains inline XBRL facts and context definitions.
-    The results are organized per year into two sections: "profit_desc" and "balance_sheet".
-    The balance_sheet section is further divided into "assets", "liabilities", and
-    "shareholders_equity" subsections.
+    The results are organized per year into three sections: "profit_desc", "balance_sheet", and
+    "segmentation". The balance_sheet section is subdivided into "assets", "liabilities", and
+    "shareholders_equity".
     """
     def __init__(self, user_agent: str):
         self.headers = {
@@ -260,6 +260,44 @@ class InsuranceMetricsExtractor:
             "foreign_currency_translation": "shareholders_equity",
             "retained_earnings": "shareholders_equity",
         }
+        # Segmentation mapping.
+        # For each segmentation key, we specify:
+        #   - "tag": the fact tag to search (here "us-gaap:Revenues")
+        #   - "explicitMembers": a dictionary of required dimension/value pairs.
+        self.segmentation_mapping = {
+            "personal_lines_agency": {
+                "tag": "us-gaap:Revenues",
+                "explicitMembers": {
+                    "srt:ProductOrServiceAxis": "pgr:UnderwritingOperationsMember",
+                    "us-gaap:StatementBusinessSegmentsAxis": "pgr:PersonalLinesSegmentMember",
+                    "us-gaap:SubsegmentsAxis": "pgr:AgencyChannelMember"
+                }
+            },
+            "personal_lines_direct": {
+                "tag": "us-gaap:Revenues",
+                "explicitMembers": {
+                    "srt:ProductOrServiceAxis": "pgr:UnderwritingOperationsMember",
+                    "us-gaap:StatementBusinessSegmentsAxis": "pgr:PersonalLinesSegmentMember",
+                    "us-gaap:SubsegmentsAxis": "pgr:DirectChannelMember"
+                }
+            },
+            "commercial_lines": {
+                "tag": "us-gaap:Revenues",
+                "explicitMembers": {
+                    "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+                    "srt:ProductOrServiceAxis": "pgr:UnderwritingOperationsMember",
+                    "us-gaap:StatementBusinessSegmentsAxis": "pgr:CommercialLinesSegmentMember"
+                }
+            },
+            "property_lines": {
+                "tag": "us-gaap:Revenues",
+                "explicitMembers": {
+                    "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+                    "srt:ProductOrServiceAxis": "pgr:UnderwritingOperationsMember",
+                    "us-gaap:StatementBusinessSegmentsAxis": "pgr:PropertySegmentMember"
+                }
+            }
+        }
 
     def parse_context(self, soup, context_ref):
         """
@@ -302,11 +340,115 @@ class InsuranceMetricsExtractor:
         logger.debug("No period information found")
         return {}
 
+    def process_mapping(self, soup, mapping):
+        """
+        Helper to process a mapping of fact metrics.
+        Returns a dictionary keyed by year with the metric values.
+        """
+        local = {}
+        for metric_name, tag in mapping.items():
+            elems = soup.find_all(tag)
+            for elem in elems:
+                try:
+                    numeric_value = float(elem.get_text(strip=True))
+                    scale = elem.get("scale", "0")
+                    if scale and scale != "0":
+                        numeric_value *= 10 ** int(scale)
+                    context_ref = elem.get("contextRef") or elem.get("contextref")
+                    if not context_ref:
+                        continue
+                    context_data = self.parse_context(soup, context_ref)
+                    period_text = context_data.get("period", "")
+                    if not period_text:
+                        continue
+                    year_match = re.search(r"(\d{4})", period_text)
+                    if not year_match:
+                        continue
+                    year = year_match.group(1)
+                    if year not in local:
+                        local[year] = {}
+                    local[year][metric_name] = numeric_value
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Error processing {metric_name}: {e}")
+                    continue
+        return local
+
+    def process_segmentation(self, soup):
+        """
+        Processes segmentation data. For each segmentation key in the segmentation_mapping,
+        this function searches for facts with the given tag (typically "us-gaap:Revenues"),
+        then looks up their context. For each fact, it finds the corresponding <context> element,
+        and if that context contains an <entity><segment> element, it collects all <xbrldi:explicitMember>
+        children. If the set of explicitMember dimensions and values exactly match the required criteria,
+        the fact's value is recorded for that segmentation key (for the year determined from the period).
+        If multiple facts match for a given segmentation key and year, their values are summed.
+        """
+        seg_results = {}
+        for seg_key, seg_info in self.segmentation_mapping.items():
+            tag = seg_info["tag"]
+            required = seg_info["explicitMembers"]
+            # Find all facts with the given tag.
+            elems = soup.find_all(tag)
+            for elem in elems:
+                try:
+                    context_ref = elem.get("contextRef") or elem.get("contextref")
+                    if not context_ref:
+                        continue
+                    # Look up the corresponding context element.
+                    context = soup.find("context", {"id": context_ref})
+                    if not context:
+                        continue
+                    # Find the segment element within the entity.
+                    entity = context.find("entity")
+                    if not entity:
+                        continue
+                    segment = entity.find("segment")
+                    if not segment:
+                        continue
+                    # Gather all explicitMember elements (namespace prefixes might vary).
+                    explicit_members = segment.find_all(lambda t: "explicitmember" in t.name.lower())
+                    # For each required dimension, check if an explicitMember with that dimension and value is present.
+                    criteria_met = True
+                    for dim, expected in required.items():
+                        # We assume that the explicitMember element has an attribute "dimension"
+                        # and its text equals the expected value.
+                        match_found = any(
+                            (exp.get("dimension") == dim and exp.get_text(strip=True) == expected)
+                            for exp in explicit_members
+                        )
+                        if not match_found:
+                            criteria_met = False
+                            break
+                    if not criteria_met:
+                        continue
+                    # If criteria are met, get the fact value.
+                    numeric_value = float(elem.get_text(strip=True))
+                    scale = elem.get("scale", "0")
+                    if scale and scale != "0":
+                        numeric_value *= 10 ** int(scale)
+                    # Get the year from the context period.
+                    context_data = self.parse_context(soup, context_ref)
+                    period_text = context_data.get("period", "")
+                    if not period_text:
+                        continue
+                    year_match = re.search(r"(\d{4})", period_text)
+                    if not year_match:
+                        continue
+                    year = year_match.group(1)
+                    if year not in seg_results:
+                        seg_results[year] = {}
+                    # Sum values if multiple facts match for the same segmentation key.
+                    seg_results[year][seg_key] = seg_results[year].get(seg_key, 0) + numeric_value
+                except Exception as e:
+                    logger.error(f"Error processing segmentation {seg_key}: {e}")
+                    continue
+        return seg_results
+
     def extract_metrics(self, xml_url: str) -> dict:
         """
         Retrieves the XML filing from xml_url, retrying a few times if a timeout occurs,
-        then parses it using the lxml-xml parser and extracts the desired metrics into two groups:
-        profit_desc and balance_sheet (the latter is subdivided).
+        then parses it using the lxml-xml parser and extracts the desired metrics into three groups:
+        profit_desc, balance_sheet (subdivided), and segmentation.
         """
         max_retries = 3
         attempt = 0
@@ -320,53 +462,21 @@ class InsuranceMetricsExtractor:
             except requests.exceptions.Timeout as e:
                 attempt += 1
                 logger.error(f"Timeout error fetching filing data (attempt {attempt}/{max_retries}): {e}")
-                time.sleep(5)  # wait 5 seconds before retrying
+                time.sleep(5)
         if not content:
             logger.error("No filing content retrieved after maximum retries.")
             return {}
         
         logger.info("Parsing document using lxml-xml parser...")
         soup = BeautifulSoup(content, "lxml-xml")
-        # Initialize a results dictionary.
         results = {}
         
-        # Helper function to process a mapping of metrics.
-        def process_mapping(mapping):
-            local = {}
-            for metric_name, tag in mapping.items():
-                elems = soup.find_all(tag)
-                for elem in elems:
-                    try:
-                        numeric_value = float(elem.get_text(strip=True))
-                        scale = elem.get("scale", "0")
-                        if scale and scale != "0":
-                            numeric_value *= 10 ** int(scale)
-                        context_ref = elem.get("contextRef") or elem.get("contextref")
-                        if not context_ref:
-                            continue
-                        context_data = self.parse_context(soup, context_ref)
-                        period_text = context_data.get("period", "")
-                        if not period_text:
-                            continue
-                        year_match = re.search(r"(\d{4})", period_text)
-                        if not year_match:
-                            continue
-                        year = year_match.group(1)
-                        if year not in local:
-                            local[year] = {}
-                        local[year][metric_name] = numeric_value
-                    except (ValueError, TypeError) as e:
-                        logger.error(f"Error processing {metric_name}: {e}")
-                        continue
-            return local
+        profit_data = self.process_mapping(soup, self.profit_desc_metrics)
+        balance_data = self.process_mapping(soup, self.balance_sheet_metrics)
+        segmentation_data = self.process_segmentation(soup)
         
-        # Process profit_desc metrics.
-        profit_data = process_mapping(self.profit_desc_metrics)
-        # Process balance_sheet metrics.
-        balance_data = process_mapping(self.balance_sheet_metrics)
-        
-        # Combine the two sets into our final results per year.
-        years = set(profit_data.keys()) | set(balance_data.keys())
+        # Combine profit and balance sheet data into final results.
+        years = set(profit_data.keys()) | set(balance_data.keys()) | set(segmentation_data.keys())
         for year in years:
             results[year] = {
                 "profit_desc": profit_data.get(year, {}),
@@ -374,7 +484,8 @@ class InsuranceMetricsExtractor:
                     "assets": {},
                     "liabilities": {},
                     "shareholders_equity": {}
-                }
+                },
+                "segmentation": segmentation_data.get(year, {})
             }
             if year in balance_data:
                 for metric_name, value in balance_data[year].items():
@@ -425,6 +536,7 @@ def main():
                                 all_results[year]["balance_sheet"][subsec] = subdata
                             else:
                                 all_results[year]["balance_sheet"][subsec].update(subdata)
+                        all_results[year]["segmentation"].update(data.get("segmentation", {}))
             else:
                 logger.warning(f"XML filing document not found for filing dated {filing['filing_date']}")
             time.sleep(0.1)
