@@ -853,6 +853,7 @@ def main():
             return
         
         current_year = datetime.datetime.now().year
+        start_year_int = int(args.start_year)
         years = list(range(int(args.start_year), current_year + 1))
         # Pass the valid company profile instead of an empty dict.
         fmp_results = extract_yoy_data(ticker, years, segmentation_data={}, profile=profile)
@@ -880,13 +881,15 @@ def main():
                 logger.warning(f"No XML filing document found for filing dated {filing['filing_date']}")
             time.sleep(0.1)
         
+        # Only include years for which SEC data exists.
         unified_results = {}
-        all_years = set(fmp_results.keys()) | set(sec_results.keys())
-        for year in all_years:
+        for year in sec_results.keys():
             fmp_year_data = fmp_results.get(year, {})
-            sec_year_data = sec_results.get(year, {})
+            sec_year_data = sec_results[year]
             unified_results[year] = create_unified_year_output(year, fmp_year_data, sec_year_data)
         
+         # Now drop any years in unified_results before our desired start year.
+        unified_results = {year: data for year, data in unified_results.items() if year >= start_year_int}
         ordered_results = dict(sorted(unified_results.items(), reverse=True))
         output_file = args.output or f"{ticker.lower()}_unified_insurance_metrics.json"
         with open(output_file, "w", encoding="utf-8") as f:
