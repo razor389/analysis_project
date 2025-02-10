@@ -854,7 +854,7 @@ def main():
         
         current_year = datetime.datetime.now().year
         start_year_int = int(args.start_year)
-        years = list(range(int(args.start_year), current_year + 1))
+        years = list(range(int(args.start_year)-1, current_year + 1))
         # Pass the valid company profile instead of an empty dict.
         fmp_results = extract_yoy_data(ticker, years, segmentation_data={}, profile=profile)
         
