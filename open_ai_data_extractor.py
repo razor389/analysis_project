@@ -439,6 +439,109 @@ def compute_balance_sheet_characteristics(bs_data: dict) -> dict:
 
     return balance_sheet_characteristics
 
+def compute_profit_description_characteristics(unified_results: dict) -> dict:
+    """
+    Compute CAGR metrics for profit description based on unified per‐year data.
+    For each metric, the function builds a list of (year, value) pairs and calls calculate_cagr()
+    if at least two data points are available.
+    
+    It computes CAGR for:
+      - Gross revenues total (from profit_description → gross_revenues → total)
+      - Gross revenues breakdown items (from profit_description → gross_revenues → breakdown)
+      - Investment income (from profit_description → investment_income)
+      - Internal costs total (from profit_description → internal_costs → total)
+      - Internal costs breakdown items (from profit_description → internal_costs → breakdown)
+      - Operating margin total (from profit_description → operating_margin → total)
+      - Operating margin breakdown items (from profit_description → operating_margin → breakdown)
+      - External costs total (from profit_description → external_costs → total)
+      - External costs breakdown items (from profit_description → external_costs → breakdown)
+      - Earnings (from profit_description → earnings)
+    """
+    years = sorted(unified_results.keys())
+    result = {}
+
+    def get_total(metric_key: str) -> list:
+        values = []
+        for year in years:
+            pd = unified_results[year].get("profit_description", {})
+            val = pd.get(metric_key)
+            if isinstance(val, (int, float)):
+                values.append((year, val))
+        return values
+
+    def get_nested_total(metric_path: tuple) -> list:
+        values = []
+        for year in years:
+            pd = unified_results[year].get("profit_description", {})
+            d = pd
+            for key in metric_path:
+                d = d.get(key, {})
+            if isinstance(d, (int, float)):
+                values.append((year, d))
+        return values
+
+    def get_breakdown(metric_path: tuple) -> dict:
+        breakdown_values = {}
+        for year in years:
+            pd = unified_results[year].get("profit_description", {})
+            d = pd
+            for key in metric_path:
+                d = d.get(key, {})
+            if isinstance(d, dict):
+                for bk, val in d.items():
+                    if isinstance(val, (int, float)):
+                        breakdown_values.setdefault(bk, []).append((year, val))
+        return breakdown_values
+
+    # Gross Revenues Total
+    gross_total = get_nested_total(("gross_revenues", "total"))
+    result["cagr_gross_revenues_percent"] = calculate_cagr(gross_total) if len(gross_total) >= 2 else None
+
+    # Investment Income
+    inv_income = get_total("investment_income")
+    result["cagr_investment_income_percent"] = calculate_cagr(inv_income) if len(inv_income) >= 2 else None
+
+    # Internal Costs Total
+    internal_total = get_nested_total(("internal_costs", "total"))
+    result["cagr_internal_costs_percent"] = calculate_cagr(internal_total) if len(internal_total) >= 2 else None
+
+    # Operating Margin Total
+    op_margin_total = get_nested_total(("operating_margin", "total"))
+    result["cagr_operating_margin_percent"] = calculate_cagr(op_margin_total) if len(op_margin_total) >= 2 else None
+
+    # External Costs Total
+    ext_total = get_nested_total(("external_costs", "total"))
+    result["cagr_external_costs_percent"] = calculate_cagr(ext_total) if len(ext_total) >= 2 else None
+
+    # Earnings
+    earnings = get_total("earnings")
+    result["cagr_earnings_percent"] = calculate_cagr(earnings) if len(earnings) >= 2 else None
+
+    # Breakdown for Gross Revenues
+    gr_breakdown = get_breakdown(("gross_revenues", "breakdown"))
+    result["cagr_gross_revenues_breakdown_percent"] = {}
+    for bk, values in gr_breakdown.items():
+        result["cagr_gross_revenues_breakdown_percent"][f"cagr_gross_revenues_{bk}_percent"] = calculate_cagr(values) if len(values) >= 2 else None
+
+    # Breakdown for Internal Costs
+    ic_breakdown = get_breakdown(("internal_costs", "breakdown"))
+    result["cagr_internal_costs_breakdown_percent"] = {}
+    for bk, values in ic_breakdown.items():
+        result["cagr_internal_costs_breakdown_percent"][f"cagr_internal_costs_{bk}_percent"] = calculate_cagr(values) if len(values) >= 2 else None
+
+    # Breakdown for Operating Margin
+    om_breakdown = get_breakdown(("operating_margin", "breakdown"))
+    result["cagr_operating_margin_breakdown_percent"] = {}
+    for bk, values in om_breakdown.items():
+        result["cagr_operating_margin_breakdown_percent"][f"cagr_operating_margin_{bk}_percent"] = calculate_cagr(values) if len(values) >= 2 else None
+
+    # Breakdown for External Costs
+    ec_breakdown = get_breakdown(("external_costs", "breakdown"))
+    result["cagr_external_costs_breakdown_percent"] = {}
+    for bk, values in ec_breakdown.items():
+        result["cagr_external_costs_breakdown_percent"][f"cagr_external_costs_{bk}_percent"] = calculate_cagr(values) if len(values) >= 2 else None
+
+    return result
 
 class EDGARExhibit13Finder:
     """
@@ -1127,6 +1230,8 @@ def main():
         
         # Compute the balance sheet characteristics using the inverted balance sheet data.
         balance_sheet_characteristics = compute_balance_sheet_characteristics(inverted_output["balance_sheet"]["data"])
+        profit_description_characteristics = compute_profit_description_characteristics(unified_results)
+        inverted_output["profit_description"]["profit_description_characteristics"] = profit_description_characteristics
 
         # Construct final output including the new summary section
         final_output = {
@@ -1142,7 +1247,10 @@ def main():
                 "balance_sheet_characteristics": balance_sheet_characteristics,
                 "data": inverted_output["balance_sheet"]["data"]
             },
-            "profit_description": inverted_output["profit_description"],
+            "profit_description": {
+                "profit_description_characteristics": profit_description_characteristics,
+                "data": inverted_output["profit_description"]["data"]
+            },
             "segmentation": inverted_output["segmentation"]
         }
 
