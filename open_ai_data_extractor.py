@@ -161,6 +161,7 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         ic = ic_by_year.get(year, {})
         cf = cf_by_year.get(year, {})
         
+        filing_url = bs.get('finalLink')
         shares_outstanding = ic.get('weightedAverageShsOutDil')
         net_profit = ic.get('netIncome')
         revenues = ic.get('revenue')
@@ -208,7 +209,8 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
             "tax_rate": fmp_tax_rate  # FMP tax rate computed above
         }
         profit_description = {
-            "gross_revenues": revenues
+            "gross_revenues": revenues,
+            "filing_url": filing_url
         }
         
         results[year] = {
@@ -655,7 +657,8 @@ def create_unified_year_output(year, fmp_data, sec_data):
        },
        "earnings": operating_margin_total - external_costs_total,
        "equity_employed": share_equity,
-       "shares_repurchased": buyback
+       "shares_repurchased": buyback,
+       "filing_url": filing_url
     },
     "segmentation": {
        "total": (sum of segmentation values),
@@ -676,7 +679,8 @@ def create_unified_year_output(year, fmp_data, sec_data):
     buyback              = fmp_comp.get("buyback")
     share_equity         = fmp_comp.get("share_equity")
     book_value_per_share = fmp_comp.get("book_value_per_share")
-    
+    filing_url = fmp_data.get("profit_description", {}).get("filing_url")
+
     # SEC balance sheet (use total assets):
     sec_balance = sec_data.get("balance_sheet", {})
     sec_assets = sec_balance.get("assets", {})
@@ -808,7 +812,8 @@ def create_unified_year_output(year, fmp_data, sec_data):
         },
         "earnings": earnings,
         "equity_employed": share_equity,
-        "shares_repurchased": buyback
+        "shares_repurchased": buyback,
+        "filing_url": filing_url
     }
     
     seg_total = sum(seg_breakdown.values()) if seg_breakdown else None

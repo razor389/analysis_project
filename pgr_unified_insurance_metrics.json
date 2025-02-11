@@ -1,0 +1,564 @@
+{
+  "2023": {
+    "company_description": {
+      "net_profit": 3902400000,
+      "diluted_eps": 6.58,
+      "operating_eps": 8.803574468085106,
+      "pe_ratio": 23.87322468224682,
+      "price_low": 111.41000366210938,
+      "price_high": 165.57000732421875,
+      "dividends_paid": 277600000,
+      "dividends_per_share": 0.4725106382978723,
+      "avg_dividend_yield": 0.003411875366855955,
+      "shares_outstanding": 587500000,
+      "buyback": -55396002.197265625,
+      "share_equity": 20277100000,
+      "book_value_per_share": 34.514212765957446,
+      "assets": 88690800000.0,
+      "return_on_equity": 0.19245355598187117,
+      "return_on_assets": 0.04400005412060778,
+      "leverage_ratio": 4.373939074127957
+    },
+    "analysis": {
+      "premium_earned": 58664400000.0,
+      "benefit_claims": 45654600000.0,
+      "gross_underwriting_profit": 13009800000.0,
+      "underwriting_yield_on_asset": 0.14668714229660798,
+      "investment_income": 1891800000.0,
+      "investment_yield_on_asset": 0.021330284539095374,
+      "non_claim_expenses": 10906600000.0,
+      "expense_yield_on_asset": 0.12297329599011397,
+      "tax_rate": 0.2041927524114444,
+      "premium_equity_ratio": 2.8931356061764255
+    },
+    "balance_sheet": {
+      "assets": {
+        "assets": 88690800000.0,
+        "cash": 99600000.0,
+        "fixed_income": 60378200000.0,
+        "preferred_stocks": 902100000.0,
+        "common_equities": 2928400000.0,
+        "short_term": 1789900000.0,
+        "accrued_investment_income": 438000000.0,
+        "premiums_receivable": 11958200000.0,
+        "reinsurance_recoverables": 5093900000.0,
+        "prepaid_reinsurance_premiums": 249800000.0,
+        "deferred_acquisition_costs": 1687400000.0,
+        "income_taxes": 975900000.0,
+        "property_and_equipment": 880800000.0,
+        "goodwill": 227900000.0,
+        "other_assets": 88100000.0
+      },
+      "liabilities": {
+        "liabilities": 68413700000.0,
+        "unearned_premiums": 20133700000.0,
+        "loss_reserves": 34389200000.0,
+        "accounts_payable": 7002200000.0,
+        "debt": 6888600000.0
+      },
+      "shareholders_equity": {
+        "shareholders_equity": 20277100000.0
+      }
+    },
+    "profit_description": {
+      "gross_revenues": {
+        "total": 58664400000.0,
+        "breakdown": {
+          "personal_lines_agency": 21198200000.0,
+          "personal_lines_direct": 25015100000.0,
+          "commercial_lines": 9898700000.0,
+          "property_lines": 2551400000.0
+        }
+      },
+      "investment_income": 1891800000.0,
+      "internal_costs": {
+        "total": 56910200000.0,
+        "breakdown": {
+          "losses_and_expenses": 45654600000.0,
+          "acquisition_costs": 4665100000.0,
+          "underwriting_expenses": 6241500000.0,
+          "service_expenses": 349000000.0
+        }
+      },
+      "operating_margin": {
+        "total": 3646000000.0,
+        "breakdown": {
+          "underwriting": 2102200000.0,
+          "pretax_combined_ratio": 0.9641650500993806,
+          "pretax_insurance_yield_on_equity": 0.10367360224095161,
+          "pretax_return_on_equity": 0.1798087497719102
+        }
+      },
+      "external_costs": {
+        "total": 268600000.0,
+        "breakdown": {
+          "taxes": 200000.0,
+          "interest_expenses": 268400000.0
+        }
+      },
+      "earnings": 3377400000.0,
+      "equity_employed": 20277100000,
+      "shares_repurchased": -55396002.197265625,
+      "filing_url": "https://www.sec.gov/Archives/edgar/data/80661/000008066124000007/pgr-20231231.htm"
+    },
+    "segmentation": {
+      "total": 58663400000.0,
+      "breakdown": {
+        "personal_lines_agency": 21198200000.0,
+        "personal_lines_direct": 25015100000.0,
+        "commercial_lines": 9898700000.0,
+        "property_lines": 2551400000.0
+      }
+    }
+  },
+  "2022": {
+    "company_description": {
+      "net_profit": 721500000,
+      "diluted_eps": 1.18,
+      "operating_eps": 1.570601260432635,
+      "pe_ratio": 105.06240332640333,
+      "price_low": 100.80999755859375,
+      "price_high": 134.5,
+      "dividends_paid": 260800000,
+      "dividends_per_share": 0.4442173394651678,
+      "avg_dividend_yield": 0.003775592572130767,
+      "shares_outstanding": 587100000,
+      "buyback": 0.0,
+      "share_equity": 15891000000,
+      "book_value_per_share": 27.066939192641797,
+      "assets": 75465000000.0,
+      "return_on_equity": 0.04540305833490655,
+      "return_on_assets": 0.009560723514211887,
+      "leverage_ratio": 4.74891447989428
+    },
+    "analysis": {
+      "premium_earned": 49241200000.0,
+      "benefit_claims": 38122700000.0,
+      "gross_underwriting_profit": 11118500000.0,
+      "underwriting_yield_on_asset": 0.14733320082157292,
+      "investment_income": 1260300000.0,
+      "investment_yield_on_asset": 0.016700457165573446,
+      "non_claim_expenses": 9776600000.0,
+      "expense_yield_on_asset": 0.12955144769098256,
+      "tax_rate": 0.21754690380652858,
+      "premium_equity_ratio": 3.0986847901327796
+    },
+    "balance_sheet": {
+      "assets": {
+        "assets": 75465000000.0,
+        "cash": 220900000.0,
+        "fixed_income": 46651900000.0,
+        "preferred_stocks": 1213200000.0,
+        "common_equities": 2821500000.0,
+        "short_term": 2861700000.0,
+        "accrued_investment_income": 282500000.0,
+        "premiums_receivable": 10416900000.0,
+        "reinsurance_recoverables": 5832100000.0,
+        "prepaid_reinsurance_premiums": 295500000.0,
+        "deferred_acquisition_costs": 1544400000.0,
+        "income_taxes": 1173700000.0,
+        "property_and_equipment": 1034000000.0,
+        "goodwill": 227900000.0,
+        "other_assets": 63400000.0,
+        "intangibles": 86300000.0
+      },
+      "liabilities": {
+        "liabilities": 59574000000.0,
+        "unearned_premiums": 17293600000.0,
+        "loss_reserves": 30359300000.0,
+        "accounts_payable": 5532800000.0,
+        "debt": 6388300000.0
+      },
+      "shareholders_equity": {
+        "shareholders_equity": 15891000000.0
+      }
+    },
+    "profit_description": {
+      "gross_revenues": {
+        "total": 49241200000.0,
+        "breakdown": {
+          "personal_lines_agency": 17744700000.0,
+          "personal_lines_direct": 20135500000.0,
+          "commercial_lines": 9088300000.0,
+          "property_lines": 2270000000.0
+        }
+      },
+      "investment_income": 1260300000.0,
+      "internal_costs": {
+        "total": 48196000000.0,
+        "breakdown": {
+          "losses_and_expenses": 38122700000.0,
+          "acquisition_costs": 3917000000.0,
+          "underwriting_expenses": 5859600000.0,
+          "service_expenses": 296700000.0
+        }
+      },
+      "operating_margin": {
+        "total": 2305500000.0,
+        "breakdown": {
+          "underwriting": 1339200000.0,
+          "pretax_combined_ratio": 0.972801770971902,
+          "pretax_insurance_yield_on_equity": 0.08427411742495752,
+          "pretax_return_on_equity": 0.14508212195582404
+        }
+      },
+      "external_costs": {
+        "total": 243600000.0,
+        "breakdown": {
+          "taxes": 100000.0,
+          "interest_expenses": 243500000.0
+        }
+      },
+      "earnings": 2061900000.0,
+      "equity_employed": 15891000000,
+      "shares_repurchased": 0.0,
+      "filing_url": "https://www.sec.gov/Archives/edgar/data/80661/000008066123000006/pgr-20221231.htm"
+    },
+    "segmentation": {
+      "total": 49238500000.0,
+      "breakdown": {
+        "personal_lines_agency": 17744700000.0,
+        "personal_lines_direct": 20135500000.0,
+        "commercial_lines": 9088300000.0,
+        "property_lines": 2270000000.0
+      }
+    }
+  },
+  "2021": {
+    "company_description": {
+      "net_profit": 3350900000,
+      "diluted_eps": 5.66,
+      "operating_eps": 7.170839720660876,
+      "pe_ratio": 17.905316482139128,
+      "price_low": 84.88999938964844,
+      "price_high": 107.58999633789062,
+      "dividends_paid": 3773300000,
+      "dividends_per_share": 6.42701413728496,
+      "avg_dividend_yield": 0.06678111263450548,
+      "shares_outstanding": 587100000,
+      "buyback": 48119998.931884766,
+      "share_equity": 18231600000,
+      "book_value_per_share": 31.053653551354113,
+      "assets": 71132300000.0,
+      "return_on_equity": 0.1837962658241734,
+      "return_on_assets": 0.047107994539751986,
+      "leverage_ratio": 3.9015939358037692
+    },
+    "analysis": {
+      "premium_earned": 44368700000.0,
+      "benefit_claims": 33627600000.0,
+      "gross_underwriting_profit": 10741100000.0,
+      "underwriting_yield_on_asset": 0.15100172495476738,
+      "investment_income": 860900000.0,
+      "investment_yield_on_asset": 0.012102799993814342,
+      "non_claim_expenses": 9367500000.0,
+      "expense_yield_on_asset": 0.13169122887914492,
+      "tax_rate": 0.20406175771971496,
+      "premium_equity_ratio": 2.4336152614142477
+    },
+    "balance_sheet": {
+      "assets": {
+        "cash": 202100000.0,
+        "assets": 71132300000.0,
+        "fixed_income": 43873100000.0,
+        "preferred_stocks": 1639900000.0,
+        "common_equities": 5058500000.0,
+        "short_term": 942600000.0,
+        "accrued_investment_income": 181700000.0,
+        "premiums_receivable": 9399500000.0,
+        "reinsurance_recoverables": 4980500000.0,
+        "prepaid_reinsurance_premiums": 457600000.0,
+        "deferred_acquisition_costs": 1355600000.0,
+        "property_and_equipment": 1137300000.0,
+        "goodwill": 452700000.0,
+        "intangibles": 117300000.0,
+        "other_assets": 47700000.0
+      },
+      "liabilities": {
+        "loss_reserves": 26164100000.0,
+        "liabilities": 52900700000.0,
+        "unearned_premiums": 15615800000.0,
+        "accounts_payable": 6010600000.0,
+        "debt": 4898800000.0
+      },
+      "shareholders_equity": {
+        "shareholders_equity": 18231600000.0
+      }
+    },
+    "profit_description": {
+      "gross_revenues": {
+        "total": 44368700000.0,
+        "breakdown": {
+          "personal_lines_agency": 16881000000.0,
+          "personal_lines_direct": 18492300000.0,
+          "commercial_lines": 6945200000.0,
+          "property_lines": 2042500000.0
+        }
+      },
+      "investment_income": 860900000.0,
+      "internal_costs": {
+        "total": 43247900000.0,
+        "breakdown": {
+          "losses_and_expenses": 33627600000.0,
+          "acquisition_costs": 3712800000.0,
+          "underwriting_expenses": 5654700000.0,
+          "service_expenses": 252800000.0
+        }
+      },
+      "operating_margin": {
+        "total": 1981700000.0,
+        "breakdown": {
+          "underwriting": 1365900000.0,
+          "pretax_combined_ratio": 0.9692094407249611,
+          "pretax_insurance_yield_on_equity": 0.07491937076285131,
+          "pretax_return_on_equity": 0.10869589065139648
+        }
+      },
+      "external_costs": {
+        "total": 218700000.0,
+        "breakdown": {
+          "taxes": 100000.0,
+          "interest_expenses": 218600000.0
+        }
+      },
+      "earnings": 1763000000.0,
+      "equity_employed": 18231600000,
+      "shares_repurchased": 48119998.931884766,
+      "filing_url": "https://www.sec.gov/Archives/edgar/data/80661/000008066122000046/pgr-20211231.htm"
+    },
+    "segmentation": {
+      "total": 44361000000.0,
+      "breakdown": {
+        "personal_lines_agency": 16881000000.0,
+        "personal_lines_direct": 18492300000.0,
+        "commercial_lines": 6945200000.0,
+        "property_lines": 2042500000.0
+      }
+    }
+  },
+  "2020": {
+    "company_description": {
+      "net_profit": 5704600000,
+      "diluted_eps": 9.66,
+      "operating_eps": 12.207624234172906,
+      "pe_ratio": 10.138294008344143,
+      "price_low": 62.18000030517578,
+      "price_high": 102.05000305175781,
+      "dividends_paid": 1577800000,
+      "dividends_per_share": 2.685159972770592,
+      "avg_dividend_yield": 0.032699992910975334,
+      "shares_outstanding": 587600000,
+      "buyback": -32846000.67138672,
+      "share_equity": 17038600000,
+      "book_value_per_share": 28.996936691626956,
+      "assets": 64098300000.0,
+      "return_on_equity": 0.3348045027173594,
+      "return_on_assets": 0.08899768012568196,
+      "leverage_ratio": 3.761946404047281
+    },
+    "analysis": {
+      "premium_earned": 39261600000.0,
+      "benefit_claims": 25121800000.0,
+      "gross_underwriting_profit": 14139800000.0,
+      "underwriting_yield_on_asset": 0.22059555401625316,
+      "investment_income": 936600000.0,
+      "investment_yield_on_asset": 0.01461193198571569,
+      "non_claim_expenses": 8843200000.0,
+      "expense_yield_on_asset": 0.13796309730523273,
+      "tax_rate": 0.2047342887414264,
+      "premium_equity_ratio": 2.3042738253142865
+    },
+    "balance_sheet": {
+      "assets": {
+        "cash": 76500000.0,
+        "assets": 64098300000.0,
+        "fixed_income": 36810900000.0,
+        "preferred_stocks": 1447900000.0,
+        "common_equities": 4053000000.0,
+        "short_term": 5218500000.0,
+        "accrued_investment_income": 176400000.0,
+        "premiums_receivable": 8160100000.0,
+        "reinsurance_recoverables": 4019400000.0,
+        "prepaid_reinsurance_premiums": 368100000.0,
+        "deferred_acquisition_costs": 1237200000.0,
+        "property_and_equipment": 1106000000.0,
+        "goodwill": 452700000.0,
+        "intangibles": 171400000.0,
+        "other_assets": 25300000.0
+      },
+      "liabilities": {
+        "loss_reserves": 20265800000.0,
+        "liabilities": 47059700000.0,
+        "unearned_premiums": 13437500000.0,
+        "accounts_payable": 4955800000.0,
+        "debt": 5396100000.0
+      },
+      "shareholders_equity": {
+        "shareholders_equity": 17038600000.0
+      }
+    },
+    "profit_description": {
+      "gross_revenues": {
+        "total": 39261600000.0,
+        "breakdown": {
+          "personal_lines_agency": 15789500000.0,
+          "personal_lines_direct": 16830600000.0,
+          "commercial_lines": 4875800000.0,
+          "property_lines": 1765700000.0
+        }
+      },
+      "investment_income": 936600000.0,
+      "internal_costs": {
+        "total": 34170500000.0,
+        "breakdown": {
+          "losses_and_expenses": 25121800000.0,
+          "acquisition_costs": 3273200000.0,
+          "underwriting_expenses": 5570000000.0,
+          "service_expenses": 205500000.0
+        }
+      },
+      "operating_margin": {
+        "total": 6027700000.0,
+        "breakdown": {
+          "underwriting": 5296600000.0,
+          "pretax_combined_ratio": 0.8650946471870734,
+          "pretax_insurance_yield_on_equity": 0.3108588733816159,
+          "pretax_return_on_equity": 0.353767328301621
+        }
+      },
+      "external_costs": {
+        "total": 217000000.0,
+        "breakdown": {
+          "taxes": 0.0,
+          "interest_expenses": 217000000.0
+        }
+      },
+      "earnings": 5810700000.0,
+      "equity_employed": 17038600000,
+      "shares_repurchased": -32846000.67138672,
+      "filing_url": "https://www.sec.gov/Archives/edgar/data/80661/000008066121000014/pgr-20201231.htm"
+    },
+    "segmentation": {
+      "total": 39261600000.0,
+      "breakdown": {
+        "personal_lines_agency": 15789500000.0,
+        "personal_lines_direct": 16830600000.0,
+        "commercial_lines": 4875800000.0,
+        "property_lines": 1765700000.0
+      }
+    }
+  },
+  "2019": {
+    "company_description": {
+      "net_profit": 3970300000,
+      "diluted_eps": 6.72,
+      "operating_eps": 8.787976839237057,
+      "pe_ratio": 10.644354834647256,
+      "price_low": 58.099998474121094,
+      "price_high": 84.95999908447266,
+      "dividends_paid": 1670000000,
+      "dividends_per_share": 2.8440054495912808,
+      "avg_dividend_yield": 0.039759618315755224,
+      "shares_outstanding": 587200000,
+      "buyback": -35764999.38964844,
+      "share_equity": 13673200000,
+      "book_value_per_share": 23.28542234332425,
+      "assets": 54895300000.0,
+      "return_on_equity": 0.2903709446215955,
+      "return_on_assets": 0.07232495313806464,
+      "leverage_ratio": 4.014809993271509
+    },
+    "analysis": {
+      "premium_earned": 36192400000.0,
+      "benefit_claims": 25470500000.0,
+      "gross_underwriting_profit": 10721900000.0,
+      "underwriting_yield_on_asset": 0.19531544594892458,
+      "investment_income": 1042000000.0,
+      "investment_yield_on_asset": 0.018981588587729734,
+      "non_claim_expenses": 7998300000.0,
+      "expense_yield_on_asset": 0.145700998081803,
+      "tax_rate": 0.2287270119954266,
+      "premium_equity_ratio": 2.6469590147149167
+    },
+    "balance_sheet": {
+      "assets": {
+        "cash": 227400000.0,
+        "assets": 54895300000.0,
+        "fixed_income": 33110300000.0,
+        "preferred_stocks": 1038900000.0,
+        "common_equities": 3306300000.0,
+        "short_term": 1798800000.0,
+        "accrued_investment_income": 181300000.0,
+        "premiums_receivable": 7507300000.0,
+        "reinsurance_recoverables": 3378900000.0,
+        "prepaid_reinsurance_premiums": 626500000.0,
+        "deferred_acquisition_costs": 1056500000.0,
+        "property_and_equipment": 1213700000.0,
+        "goodwill": 452700000.0,
+        "intangibles": 228300000.0,
+        "other_assets": 768400000.0,
+        "income_taxes": 0.0
+      },
+      "liabilities": {
+        "loss_reserves": 18105400000.0,
+        "liabilities": 40996500000.0,
+        "unearned_premiums": 12388800000.0,
+        "accounts_payable": 5962700000.0,
+        "debt": 4407100000.0
+      },
+      "shareholders_equity": {
+        "shareholders_equity": 13673200000.0
+      }
+    },
+    "profit_description": {
+      "gross_revenues": {
+        "total": 36192400000.0,
+        "breakdown": {
+          "personal_lines_agency": 14904100000.0,
+          "personal_lines_direct": 15305900000.0,
+          "commercial_lines": 4427600000.0,
+          "property_lines": 1554800000.0
+        }
+      },
+      "investment_income": 1042000000.0,
+      "internal_costs": {
+        "total": 33647700000.0,
+        "breakdown": {
+          "losses_and_expenses": 25470500000.0,
+          "acquisition_costs": 3023200000.0,
+          "underwriting_expenses": 4975100000.0,
+          "service_expenses": 178900000.0
+        }
+      },
+      "operating_margin": {
+        "total": 3586700000.0,
+        "breakdown": {
+          "underwriting": 2723600000.0,
+          "pretax_combined_ratio": 0.924746631889568,
+          "pretax_insurance_yield_on_equity": 0.1991925811075681,
+          "pretax_return_on_equity": 0.2623160635403563
+        }
+      },
+      "external_costs": {
+        "total": 199600000.0,
+        "breakdown": {
+          "taxes": 9900000.0,
+          "interest_expenses": 189700000.0
+        }
+      },
+      "earnings": 3387100000.0,
+      "equity_employed": 13673200000,
+      "shares_repurchased": -35764999.38964844,
+      "filing_url": "https://www.sec.gov/Archives/edgar/data/80661/000008066120000006/pgr-20191231x10k.htm"
+    },
+    "segmentation": {
+      "total": 36192400000.0,
+      "breakdown": {
+        "personal_lines_agency": 14904100000.0,
+        "personal_lines_direct": 15305900000.0,
+        "commercial_lines": 4427600000.0,
+        "property_lines": 1554800000.0
+      }
+    }
+  }
+}
