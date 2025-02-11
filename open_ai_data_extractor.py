@@ -18,7 +18,7 @@ import datetime
 from acm_analysis import calculate_cagr
 from financial_data_preprocessor import process_financial_statements
 from unified_segmentation import get_filing_contents
-from utils import get_company_profile, get_yahoo_ticker, get_yearly_high_low_yahoo
+from utils import get_company_profile, get_current_market_cap_yahoo, get_current_quote_yahoo, get_yahoo_ticker, get_yearly_high_low_yahoo
 
 # Load environment variables
 load_dotenv()
@@ -40,6 +40,22 @@ def find_context(soup, context_ref):
     (lowercased) contains 'context'.
     """
     return soup.find(lambda tag: tag.get("id") == context_ref and "context" in tag.name.lower())
+
+def get_fiscal_year_end(symbol: str) -> str:
+    """
+    Fetch the fiscalYearEnd from the company-core-information endpoint.
+    """
+    url = f"https://financialmodelingprep.com/api/v4/company-core-information?symbol={symbol}&apikey={FMP_API_KEY}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        if isinstance(data, list) and len(data) > 0:
+            return data[0].get("fiscalYearEnd")
+        return None
+    except Exception as e:
+        print(f"Error fetching fiscalYearEnd for {symbol}: {e}")
+        return None
 
 def get_financials(symbol: str, statement_type: str, frequency: str):
     """
@@ -373,6 +389,55 @@ def compute_investment_characteristics(yoy_data: dict):
         investment_characteristics["sales_analysis_last_5_years"]["growth_rate_percent_sales_per_share"] = calculate_cagr(asset_per_share_values_5y)
 
     return investment_characteristics
+
+def compute_balance_sheet_characteristics(bs_data: dict) -> dict:
+    """
+    Given the inverted balance sheet data (a dict keyed by year),
+    compute the CAGR (as a percent string) for total assets, total liabilities,
+    and total shareholders' equity.
+    
+    Expects each year’s balance sheet data to have:
+       - assets: a dict with key "assets" (or "total_assets") containing a numeric value
+       - liabilities: a dict with key "liabilities" containing a numeric value
+       - shareholders_equity: a dict with key "shareholders_equity" containing a numeric value
+    """
+    balance_sheet_characteristics = {
+        "cagr_total_assets_percent": None,
+        "cagr_total_liabilities_percent": None,
+        "cagr_total_shareholders_equity_percent": None
+    }
+    
+    sorted_years = sorted(bs_data.keys())
+    if len(sorted_years) < 2:
+        return balance_sheet_characteristics
+
+    def build_bs_values(key_chain: tuple) -> list:
+        # key_chain is a tuple of keys to traverse; for example: ("assets", "assets")
+        vals = []
+        for year in sorted_years:
+            d = bs_data[year]
+            for key in key_chain:
+                d = d.get(key, {})
+            if isinstance(d, (int, float)):
+                vals.append((year, d))
+        return vals
+
+    # Build values for total assets from path ("assets", "assets")
+    assets_values = build_bs_values(("assets", "assets"))
+    if len(assets_values) >= 2:
+        balance_sheet_characteristics["cagr_total_assets_percent"] = calculate_cagr(assets_values)
+
+    # Build values for total liabilities from path ("liabilities", "liabilities")
+    liabilities_values = build_bs_values(("liabilities", "liabilities"))
+    if len(liabilities_values) >= 2:
+        balance_sheet_characteristics["cagr_total_liabilities_percent"] = calculate_cagr(liabilities_values)
+
+    # Build values for total shareholders' equity from path ("shareholders_equity", "shareholders_equity")
+    equity_values = build_bs_values(("shareholders_equity", "shareholders_equity"))
+    if len(equity_values) >= 2:
+        balance_sheet_characteristics["cagr_total_shareholders_equity_percent"] = calculate_cagr(equity_values)
+
+    return balance_sheet_characteristics
 
 
 class EDGARExhibit13Finder:
@@ -1054,13 +1119,29 @@ def main():
             "isAdr": profile.get("isAdr")
         }
         # -------------------------------------------------------------------------
+        # Retrieve the fiscal year end using the helper function (assumed to be imported)
+        fiscal_year_end = get_fiscal_year_end(ticker)  # e.g., returns "12-31"
+        # Get current stock price and market capitalization (assumed available via utils)
+        stock_price = get_current_quote_yahoo(get_yahoo_ticker(profile))
+        market_cap = get_current_market_cap_yahoo(get_yahoo_ticker(profile))
+        
+        # Compute the balance sheet characteristics using the inverted balance sheet data.
+        balance_sheet_characteristics = compute_balance_sheet_characteristics(inverted_output["balance_sheet"]["data"])
 
         # Construct final output including the new summary section
         final_output = {
             "summary": summary,
-            "company_description": inverted_output["company_description"],
+            "company_description": {
+                "fiscal_year_end": fiscal_year_end,
+                "stock_price": stock_price,
+                "marketCapitalization": market_cap,
+                "data": inverted_output["company_description"]["data"]
+            },
             "analyses": inverted_output["analyses"],
-            "balance_sheet": inverted_output["balance_sheet"],
+            "balance_sheet": {
+                "balance_sheet_characteristics": balance_sheet_characteristics,
+                "data": inverted_output["balance_sheet"]["data"]
+            },
             "profit_description": inverted_output["profit_description"],
             "segmentation": inverted_output["segmentation"]
         }
