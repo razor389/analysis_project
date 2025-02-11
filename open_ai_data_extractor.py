@@ -350,7 +350,23 @@ class MetricsExtractor:
       - balance_sheet
       - segmentation
     """
-    def __init__(self, user_agent: str):
+    def __init__(self, user_agent: str, config: dict):
+        if not config:
+            raise ValueError("A valid metrics configuration must be provided. Terminating.")
+        
+        # Extract required mappings from the config.
+        self.profit_desc_metrics = config.get("profit_desc_metrics")
+        self.balance_sheet_metrics = config.get("balance_sheet_metrics")
+        self.segmentation_mapping = config.get("segmentation_mapping")
+        self.balance_sheet_categories = config.get("balance_sheet_categories")
+        
+        # Ensure all required config sections are present.
+        if not (self.profit_desc_metrics and self.balance_sheet_metrics and 
+                self.segmentation_mapping and self.balance_sheet_categories):
+            raise ValueError("Incomplete metrics configuration. Please provide profit, balance sheet, segmentation mappings, and balance sheet categories.")
+
+        self.config = config  # Save entire config if needed later.
+        
         self.headers = {
             "User-Agent": user_agent,
             "Accept-Encoding": "gzip, deflate",
@@ -364,81 +380,6 @@ class MetricsExtractor:
         )
         adapter = requests.adapters.HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("https://", adapter)
-        self.profit_desc_metrics = {
-            "gross_revenues": "us-gaap:PremiumsEarnedNetPropertyAndCasualty",
-            "investment_income": "us-gaap:InterestAndDividendIncomeOperating",
-            "losses_and_expenses": "us-gaap:IncurredClaimsPropertyCasualtyAndLiability",
-            "acquisition_costs": "us-gaap:DeferredPolicyAcquisitionCostAmortizationExpense",
-            "underwriting_expenses": "us-gaap:OtherUnderwritingExpense",
-            "service_expenses": "pgr:NonInsuranceServiceExpenses",
-            "taxes": "us-gaap:IncomeTaxExpenseBenefit",
-            "interest_expenses": "us-gaap:InterestExpenseDebt"
-        }
-        self.balance_sheet_metrics = {
-            "assets": "us-gaap:Assets",
-            "cash": "us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
-            "fixed_income": "pgr:DebtSecuritiesAvailableforsaleFixedMaturities",
-            "preferred_stocks": "pgr:EquitySecuritiesFVNINonredeemablePreferredStock",
-            "common_equities": "pgr:EquitySecuritiesFVNICommonEquities",
-            "short_term": "us-gaap:ShortTermInvestments",
-            "accrued_investment_income": "us-gaap:AccruedInvestmentIncomeReceivable",
-            "premiums_receivable": "us-gaap:PremiumsReceivableAtCarryingValue",
-            "reinsurance_recoverables": "us-gaap:ReinsuranceRecoverables",
-            "prepaid_reinsurance_premiums": "us-gaap:PrepaidReinsurancePremiums",
-            "deferred_acquisition_costs": "us-gaap:DeferredPolicyAcquisitionCosts",
-            "income_taxes": "us-gaap:DeferredTaxAssetsLiabilitiesNet",
-            "property_and_equipment": "us-gaap:PropertyPlantAndEquipmentNet",
-            "goodwill": "us-gaap:Goodwill",
-            "intangibles": "us-gaap:IntangibleAssetsNetExcludingGoodwill",
-            "other_assets": "us-gaap:OtherAssets",
-            "liabilities": "us-gaap:Liabilities",
-            "unearned_premiums": "us-gaap:UnearnedPremiums",
-            "loss_reserves": "us-gaap:LiabilityForClaimsAndClaimsAdjustmentExpense",
-            "accounts_payable": "us-gaap:AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent",
-            "debt": "us-gaap:DebtLongtermAndShorttermCombinedAmount",
-            "shareholders_equity": "us-gaap:StockholdersEquity",
-            "preferred_stock": "us-gaap:PreferredStockValueOutstanding",
-            "common_stock": "us-gaap:CommonStockValueOutstanding",
-            "paid_in_capital": 	"us-gaap:AdditionalPaidInCapitalCommonStock",
-            "retained_earnings": "us-gaap:RetainedEarningsAccumulatedDeficit",
-            "unrealized_cap_gain": "us-gaap:AccumulatedOtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax",
-            "hedges": "us-gaap:AociLossCashFlowHedgeCumulativeGainLossAfterTax",
-            "forex_adjustments": "us-gaap:AccumulatedOtherComprehensiveIncomeLossForeignCurrencyTranslationAdjustmentNetOfTax"
-        }
-        self.segmentation_mapping = {
-            "personal_lines_agency": {
-                "tag": "us-gaap:Revenues",
-                "explicitMembers": {
-                    "srt:ProductOrServiceAxis": "pgr:UnderwritingOperationsMember",
-                    "us-gaap:StatementBusinessSegmentsAxis": "pgr:PersonalLinesSegmentMember",
-                    "us-gaap:SubsegmentsAxis": "pgr:AgencyChannelMember"
-                }
-            },
-            "personal_lines_direct": {
-                "tag": "us-gaap:Revenues",
-                "explicitMembers": {
-                    "srt:ProductOrServiceAxis": "pgr:UnderwritingOperationsMember",
-                    "us-gaap:StatementBusinessSegmentsAxis": "pgr:PersonalLinesSegmentMember",
-                    "us-gaap:SubsegmentsAxis": "pgr:DirectChannelMember"
-                }
-            },
-            "commercial_lines": {
-                "tag": "us-gaap:Revenues",
-                "explicitMembers": {
-                    "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
-                    "srt:ProductOrServiceAxis": "pgr:UnderwritingOperationsMember",
-                    "us-gaap:StatementBusinessSegmentsAxis": "pgr:CommercialLinesSegmentMember"
-                }
-            },
-            "property_lines": {
-                "tag": "us-gaap:Revenues",
-                "explicitMembers": {
-                    "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
-                    "srt:ProductOrServiceAxis": "pgr:UnderwritingOperationsMember",
-                    "us-gaap:StatementBusinessSegmentsAxis": "pgr:PropertySegmentMember"
-                }
-            }
-        }
     
     def parse_context(self, soup, context_ref):
         logger.debug(f"Parsing context: {context_ref}")
@@ -578,6 +519,11 @@ class MetricsExtractor:
         balance_data = self.process_mapping(soup, self.balance_sheet_metrics)
         segmentation_data = self.process_segmentation(soup)
         
+        # Retrieve balance_sheet_categories configuration from the config.
+        balance_sheet_categories = self.balance_sheet_categories
+        if not balance_sheet_categories:
+            raise ValueError("Missing 'balance_sheet_categories' in configuration.")
+
         years = set(profit_data.keys()) | set(balance_data.keys()) | set(segmentation_data.keys())
         for year in years:
             results[year] = {
@@ -591,17 +537,15 @@ class MetricsExtractor:
             }
             if year in balance_data:
                 for metric_name, value in balance_data[year].items():
-                    if metric_name in ["assets", "cash", "fixed_income", "preferred_stocks", "common_equities",
-                                       "short_term", "accrued_investment_income", "premiums_receivable",
-                                       "reinsurance_recoverables", "prepaid_reinsurance_premiums",
-                                       "deferred_acquisition_costs", "income_taxes", "property_and_equipment",
-                                       "goodwill", "intangibles", "other_assets"]:
-                        results[year]["balance_sheet"]["assets"][metric_name] = value
-                    elif metric_name in ["liabilities", "unearned_premiums", "loss_reserves", "accounts_payable", "debt"]:
-                        results[year]["balance_sheet"]["liabilities"][metric_name] = value
-                    elif metric_name in ["shareholders_equity", "preferred_stock","common_stock","paid_in_capital","retained_earnings","unrealized_cap_gain","hedges","forex_adjustments"]:
-                        results[year]["balance_sheet"]["shareholders_equity"][metric_name] = value
-                    else:
+                    assigned = False
+                    # Loop through each category (assets, liabilities, shareholders_equity) as defined in the config.
+                    for category, metrics_list in balance_sheet_categories.items():
+                        if metric_name in metrics_list:
+                            results[year]["balance_sheet"][category][metric_name] = value
+                            assigned = True
+                            break
+                    if not assigned:
+                        # If the metric isn't found in any category, assign it to assets by default.
                         results[year]["balance_sheet"]["assets"][metric_name] = value
         logger.info(f"Extracted SEC metrics: {results}")
         return results
@@ -844,9 +788,25 @@ def main():
     parser.add_argument("start_year", type=str, help="Start year (YYYY)")
     parser.add_argument("--email", type=str, required=True, help="Your email for SEC user agent")
     parser.add_argument("--output", type=str, help="Output JSON file")
+    parser.add_argument("--config", type=str, default="metrics_config.json",
+                        help="Path to the metrics config file (JSON format)")
     args = parser.parse_args()
     
     ticker = args.ticker.upper()
+    # Load the metrics configuration file.
+    try:
+        with open(args.config, "r") as f:
+            metrics_config = json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading config file {args.config}: {e}")
+        return  # Terminate if the config file cannot be loaded.
+    
+    # Look for a ticker-specific configuration.
+    ticker_config = metrics_config.get(ticker)
+    if not ticker_config:
+        logger.error(f"No metrics configuration found for ticker {ticker} in {args.config}. Terminating.")
+        return
+
     # Retrieve company profile using the utils function.
     profile = get_company_profile(ticker)
     if not profile:
@@ -854,7 +814,11 @@ def main():
         return
     
     finder = EDGARExhibit13Finder(f"Insurance Research - Contact: {args.email}")
-    extractor = MetricsExtractor(f"Insurance Research - Contact: {args.email}")
+    try:
+        extractor = MetricsExtractor(f"Insurance Research - Contact: {args.email}", config=ticker_config)
+    except ValueError as ve:
+        logger.error(f"Configuration error: {ve}")
+        return
     
     try:
         cik = finder.get_cik_from_ticker(ticker)
