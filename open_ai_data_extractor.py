@@ -15,6 +15,7 @@ from urllib3.util.retry import Retry
 import datetime
 
 # Import helper functions from your modules.
+from acm_analysis import calculate_cagr
 from financial_data_preprocessor import process_financial_statements
 from unified_segmentation import get_filing_contents
 from utils import get_company_profile, get_yahoo_ticker, get_yearly_high_low_yahoo
@@ -223,6 +224,156 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         prev_shares_outstanding = shares_outstanding
         
     return results
+
+def compute_investment_characteristics(yoy_data: dict):
+    """
+    Compute investment characteristics based on year‐over‐year (YOY) data.
+    For the “sales_analysis” subsections, we use the growth in total assets (and assets per share)
+    rather than revenues and sales per share.
+    Assumes that each year’s unified data (yoy_data[year]) contains a "company_description" with keys:
+       - "operating_eps", "diluted_eps", "dividends_per_share", "buyback", "net_profit", "shares_outstanding"
+       - "assets" (from SEC balance sheet, as computed in create_unified_year_output)
+    Also assumes that a calculate_cagr(values_by_year: list) function is available.
+    """
+    investment_characteristics = {
+        "earnings_analysis": {
+            "growth_rate_percent_operating_eps": None,
+            "quality_percent": None
+        },
+        "use_of_earnings_analysis": {
+            "avg_dividend_payout_percent": None,
+            "avg_stock_buyback_percent": None
+        },
+        "sales_analysis": {
+            "growth_rate_percent_revenues": None,              # now: growth rate in assets
+            "growth_rate_percent_sales_per_share": None          # now: growth rate in assets per share
+        },
+        "sales_analysis_last_5_years": {
+            "growth_rate_percent_revenues": None,              # now: growth rate in assets
+            "growth_rate_percent_sales_per_share": None          # now: growth rate in assets per share
+        }
+    }
+
+    sorted_years = sorted(yoy_data.keys())
+
+    def build_values_by_year(metric_key_chain):
+        # Follow a chain of keys (e.g. ("company_description", "operating_eps"))
+        # to return a list of (year, value) pairs.
+        vals = []
+        for year in sorted_years:
+            d = yoy_data[year]
+            for k in metric_key_chain:
+                d = d.get(k, {})
+            # If d is not a dict, then it is our value.
+            if not isinstance(d, dict):
+                val = d
+            else:
+                val = None
+            if val is not None:
+                vals.append((year, val))
+        return vals
+
+    # --- Earnings Analysis (unchanged) ---
+
+    # (a) Growth Rate in Operating EPS
+    ops_eps_values = build_values_by_year(("company_description", "operating_eps"))
+    if len(ops_eps_values) >= 2:
+        cagr_ops = calculate_cagr(ops_eps_values)
+        investment_characteristics["earnings_analysis"]["growth_rate_percent_operating_eps"] = cagr_ops
+
+    # (b) Earnings Quality: ratio of diluted_eps to operating_eps averaged over years
+    total_eps = total_operating_eps = count_eps = count_operating_eps = 0
+    for year in sorted_years:
+        eps = yoy_data[year]["company_description"].get("diluted_eps")
+        operating_eps = yoy_data[year]["company_description"].get("operating_eps")
+        if eps is not None:
+            total_eps += eps
+            count_eps += 1
+        if operating_eps is not None:
+            total_operating_eps += operating_eps
+            count_operating_eps += 1
+    avg_eps = total_eps / count_eps if count_eps > 0 else None
+    avg_operating_eps = total_operating_eps / count_operating_eps if count_operating_eps > 0 else None
+    if avg_eps and avg_operating_eps and avg_operating_eps != 0:
+        quality_percent = avg_eps / avg_operating_eps
+        investment_characteristics["earnings_analysis"]["quality_percent"] = round(quality_percent, 2)
+
+    # --- Use of Earnings (unchanged) ---
+
+    # (a) Average Dividend Payout %
+    sum_dividends_per_share = sum_operating_eps_for_div = count_for_div = 0
+    for year in sorted_years:
+        dividends = yoy_data[year]["company_description"].get("dividends_per_share")
+        operating_eps = yoy_data[year]["company_description"].get("operating_eps")
+        if dividends is not None and operating_eps and operating_eps != 0:
+            sum_dividends_per_share += dividends
+            sum_operating_eps_for_div += operating_eps
+            count_for_div += 1
+    if count_for_div > 0:
+        avg_dividend = sum_dividends_per_share / count_for_div
+        avg_operating = sum_operating_eps_for_div / count_for_div
+        investment_characteristics["use_of_earnings_analysis"]["avg_dividend_payout_percent"] = round(avg_dividend / avg_operating, 2)
+
+    # (b) Average Stock Buyback %
+    sum_buyback = sum_net_profit = 0
+    for year in sorted_years:
+        buyback = yoy_data[year]["company_description"].get("buyback")
+        net_profit = yoy_data[year]["company_description"].get("net_profit")
+        if buyback is not None and net_profit and net_profit != 0:
+            sum_buyback += buyback
+            sum_net_profit += net_profit
+    if sum_net_profit != 0:
+        investment_characteristics["use_of_earnings_analysis"]["avg_stock_buyback_percent"] = round(sum_buyback / sum_net_profit, 2)
+
+    # --- Sales Analysis (asset-based now) ---
+
+    # (a) Total Assets Growth (instead of revenues)
+    asset_values = []
+    for year in sorted_years:
+        assets = yoy_data[year]["company_description"].get("assets")
+        if assets is not None:
+            asset_values.append((year, assets))
+    if len(asset_values) >= 2:
+        # Note: The label "growth_rate_percent_revenues" remains for backward compatibility;
+        # you might want to rename the key in your final output.
+        investment_characteristics["sales_analysis"]["growth_rate_percent_revenues"] = calculate_cagr(asset_values)
+
+    # (b) Assets per Share Growth
+    asset_per_share_values = []
+    for year in sorted_years:
+        comp = yoy_data[year]["company_description"]
+        assets = comp.get("assets")
+        shares = comp.get("shares_outstanding")
+        if assets is not None and shares and shares != 0:
+            asset_per_share = assets / shares
+            asset_per_share_values.append((year, asset_per_share))
+    if len(asset_per_share_values) >= 2:
+        investment_characteristics["sales_analysis"]["growth_rate_percent_sales_per_share"] = calculate_cagr(asset_per_share_values)
+
+    # --- Sales Analysis Last 5 Years (asset-based) ---
+
+    last_5_years = sorted_years[-5:]
+    asset_values_5y = []
+    for y in last_5_years:
+        assets = yoy_data[y]["company_description"].get("assets")
+        if assets is not None:
+            asset_values_5y.append((y, assets))
+    if len(asset_values_5y) >= 2:
+        investment_characteristics["sales_analysis_last_5_years"]["growth_rate_percent_revenues"] = calculate_cagr(asset_values_5y)
+
+    asset_per_share_values_5y = []
+    for y in last_5_years:
+        comp = yoy_data[y]["company_description"]
+        assets = comp.get("assets")
+        shares = comp.get("shares_outstanding")
+        if assets is not None and shares and shares != 0:
+            asset_per_share = assets / shares
+            asset_per_share_values_5y.append((y, asset_per_share))
+    if len(asset_per_share_values_5y) >= 2:
+        investment_characteristics["sales_analysis_last_5_years"]["growth_rate_percent_sales_per_share"] = calculate_cagr(asset_per_share_values_5y)
+
+    return investment_characteristics
+
 
 class EDGARExhibit13Finder:
     """
@@ -883,6 +1034,15 @@ def main():
             inverted_output["balance_sheet"]["data"][year] = metrics.get("balance_sheet", {})
             inverted_output["profit_description"]["data"][year] = metrics.get("profit_description", {})
             inverted_output["segmentation"]["data"][year] = metrics.get("segmentation", {})
+        
+        # Compute the investment characteristics based on the unified year-by-year data.
+        investment_characteristics = compute_investment_characteristics(unified_results)
+
+        # Now insert the new section into the "analyses" top-level key.
+        # (You can choose whether to place it at the same level as "data" or merge it with per‑year analyses.)
+        inverted_output["analyses"]["investment_characteristics"] = investment_characteristics
+
+        
         summary = {
             "symbol": profile.get("symbol"),
             "company_name": profile.get("companyName"),
