@@ -1,3 +1,4 @@
+# analysis_project/open_ai_data_extractor.py
 #!/usr/bin/env python3
 import os
 import json
@@ -882,10 +883,31 @@ def main():
             inverted_output["balance_sheet"]["data"][year] = metrics.get("balance_sheet", {})
             inverted_output["profit_description"]["data"][year] = metrics.get("profit_description", {})
             inverted_output["segmentation"]["data"][year] = metrics.get("segmentation", {})
-        
+        summary = {
+            "symbol": profile.get("symbol"),
+            "company_name": profile.get("companyName"),
+            "exchange": profile.get("exchange"),
+            "description": profile.get("description"),
+            "sector": profile.get("sector"),
+            "industry": profile.get("industry"),
+            "reported_currency": profile.get("reported_currency") or profile.get("currency"),
+            "isAdr": profile.get("isAdr")
+        }
+        # -------------------------------------------------------------------------
+
+        # Construct final output including the new summary section
+        final_output = {
+            "summary": summary,
+            "company_description": inverted_output["company_description"],
+            "analysis": inverted_output["analysis"],
+            "balance_sheet": inverted_output["balance_sheet"],
+            "profit_description": inverted_output["profit_description"],
+            "segmentation": inverted_output["segmentation"]
+        }
+
         output_file = args.output or f"{ticker.lower()}_unified_insurance_metrics.json"
         with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(inverted_output, f, indent=2)
+            json.dump(final_output, f, indent=2)
         logger.info(f"Unified results saved to {output_file}")
     except Exception as e:
         logger.error(f"Error: {e}")
