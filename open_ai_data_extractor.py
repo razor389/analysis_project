@@ -396,7 +396,14 @@ class MetricsExtractor:
             "loss_reserves": "us-gaap:LiabilityForClaimsAndClaimsAdjustmentExpense",
             "accounts_payable": "us-gaap:AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent",
             "debt": "us-gaap:DebtLongtermAndShorttermCombinedAmount",
-            "shareholders_equity": "us-gaap:StockholdersEquity"
+            "shareholders_equity": "us-gaap:StockholdersEquity",
+            "preferred_stock": "us-gaap:PreferredStockValueOutstanding",
+            "common_stock": "us-gaap:CommonStockValueOutstanding",
+            "paid_in_capital": 	"us-gaap:AdditionalPaidInCapitalCommonStock",
+            "retained_earnings": "us-gaap:RetainedEarningsAccumulatedDeficit",
+            "unrealized_cap_gain": "us-gaap:AccumulatedOtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax",
+            "hedges": "us-gaap:AociLossCashFlowHedgeCumulativeGainLossAfterTax",
+            "forex_adjustments": "us-gaap:AccumulatedOtherComprehensiveIncomeLossForeignCurrencyTranslationAdjustmentNetOfTax"
         }
         self.segmentation_mapping = {
             "personal_lines_agency": {
@@ -592,7 +599,7 @@ class MetricsExtractor:
                         results[year]["balance_sheet"]["assets"][metric_name] = value
                     elif metric_name in ["liabilities", "unearned_premiums", "loss_reserves", "accounts_payable", "debt"]:
                         results[year]["balance_sheet"]["liabilities"][metric_name] = value
-                    elif metric_name in ["shareholders_equity"]:
+                    elif metric_name in ["shareholders_equity", "preferred_stock","common_stock","paid_in_capital","retained_earnings","unrealized_cap_gain","hedges","forex_adjustments"]:
                         results[year]["balance_sheet"]["shareholders_equity"][metric_name] = value
                     else:
                         results[year]["balance_sheet"]["assets"][metric_name] = value
@@ -893,12 +900,28 @@ def main():
             sec_year_data = sec_results[year]
             unified_results[year] = create_unified_year_output(year, fmp_year_data, sec_year_data)
         
-         # Now drop any years in unified_results before our desired start year.
+        # Now drop any years in unified_results before our desired start year.
         unified_results = {year: data for year, data in unified_results.items() if year >= start_year_int}
         ordered_results = dict(sorted(unified_results.items(), reverse=True))
+        
+        # Invert the output structure so that the top level keys are the metric categories.
+        inverted_output = {
+            "company_description": {"data": {}},
+            "analysis": {"data": {}},
+            "balance_sheet": {"data": {}},
+            "profit_description": {"data": {}},
+            "segmentation": {"data": {}}
+        }
+        for year, metrics in ordered_results.items():
+            inverted_output["company_description"]["data"][year] = metrics.get("company_description", {})
+            inverted_output["analysis"]["data"][year] = metrics.get("analysis", {})
+            inverted_output["balance_sheet"]["data"][year] = metrics.get("balance_sheet", {})
+            inverted_output["profit_description"]["data"][year] = metrics.get("profit_description", {})
+            inverted_output["segmentation"]["data"][year] = metrics.get("segmentation", {})
+        
         output_file = args.output or f"{ticker.lower()}_unified_insurance_metrics.json"
         with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(ordered_results, f, indent=2)
+            json.dump(inverted_output, f, indent=2)
         logger.info(f"Unified results saved to {output_file}")
     except Exception as e:
         logger.error(f"Error: {e}")
