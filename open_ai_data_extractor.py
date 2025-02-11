@@ -161,7 +161,7 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         ic = ic_by_year.get(year, {})
         cf = cf_by_year.get(year, {})
         
-        filing_url = bs.get('finalLink')
+        filing_url = bs.get('link')
         shares_outstanding = ic.get('weightedAverageShsOutDil')
         net_profit = ic.get('netIncome')
         revenues = ic.get('revenue')
