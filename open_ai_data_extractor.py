@@ -205,7 +205,7 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
             "book_value_per_share": book_value_per_share
         }
         
-        analysis = {
+        analyses = {
             "revenue": revenues,
             "tax_rate": fmp_tax_rate  # FMP tax rate computed above
         }
@@ -216,7 +216,7 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         
         results[year] = {
             "company_description": company_description,
-            "analysis": analysis,
+            "analyses": analyses,
             "profit_description": profit_description
             # FMP balance sheet data is ignored; we use SEC balance sheet.
         }
@@ -574,7 +574,7 @@ def create_unified_year_output(year, fmp_data, sec_data):
        "return_on_assets" = net_profit / assets,
        "leverage_ratio" = assets / share_equity
     },
-    "analysis": {
+    "analyses": {
        "premium_earned" = gross_revenues from SEC profit_desc,
        "benefit_claims" = losses_and_expenses from SEC profit_desc,
        "gross_underwriting_profit" = premium_earned - benefit_claims,
@@ -694,10 +694,10 @@ def create_unified_year_output(year, fmp_data, sec_data):
                             else None)
     
     # Note: tax rate now comes from FMP. Retrieve it from FMP analysis:
-    fmp_analysis = fmp_data.get("analysis", {})
-    fmp_tax_rate = fmp_analysis.get("tax_rate")
+    fmp_analyses = fmp_data.get("analyses", {})
+    fmp_tax_rate = fmp_analyses.get("tax_rate")
     
-    analysis = {
+    analyses = {
         "premium_earned": premium_earned,
         "benefit_claims": benefit_claims,
         "gross_underwriting_profit": gross_underwriting_profit,
@@ -776,7 +776,7 @@ def create_unified_year_output(year, fmp_data, sec_data):
     
     unified = {
         "company_description": company_description,
-        "analysis": analysis,
+        "analyses": analyses,
         "balance_sheet": sec_data.get("balance_sheet", {}),
         "profit_description": profit_description,
         "segmentation": segmentation
@@ -872,14 +872,14 @@ def main():
         # Invert the output structure so that the top level keys are the metric categories.
         inverted_output = {
             "company_description": {"data": {}},
-            "analysis": {"data": {}},
+            "analyses": {"data": {}},
             "balance_sheet": {"data": {}},
             "profit_description": {"data": {}},
             "segmentation": {"data": {}}
         }
         for year, metrics in ordered_results.items():
             inverted_output["company_description"]["data"][year] = metrics.get("company_description", {})
-            inverted_output["analysis"]["data"][year] = metrics.get("analysis", {})
+            inverted_output["analyses"]["data"][year] = metrics.get("analyses", {})
             inverted_output["balance_sheet"]["data"][year] = metrics.get("balance_sheet", {})
             inverted_output["profit_description"]["data"][year] = metrics.get("profit_description", {})
             inverted_output["segmentation"]["data"][year] = metrics.get("segmentation", {})
@@ -899,7 +899,7 @@ def main():
         final_output = {
             "summary": summary,
             "company_description": inverted_output["company_description"],
-            "analysis": inverted_output["analysis"],
+            "analyses": inverted_output["analyses"],
             "balance_sheet": inverted_output["balance_sheet"],
             "profit_description": inverted_output["profit_description"],
             "segmentation": inverted_output["segmentation"]
