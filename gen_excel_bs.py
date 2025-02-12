@@ -896,38 +896,56 @@ def write_profit_desc_sheet(writer, final_output):
                     percent_cell.font = Font(name="Arial", italic=True, size=8)
 
 def write_balance_sheet_sheet(writer, final_output):
+    """
+    Writes a Balance Sheet worksheet to the Excel workbook using data from final_output.
+    This version is flexible with the input data structure and preserves the order of breakdown items:
+      - If a section (assets, liabilities, shareholders_equity) has a key equal to its name,
+        that value is treated as the total for that section.
+      - Any other keys in the section (or, if provided, in a nested "breakdown" dict)
+        are treated as breakdown items.
+    Values are converted from raw units to millions.
+    """
+    # Assume these style objects and helper functions are defined elsewhere:
+    #   label_fill, label_font, title_font, data_fill, data_arial_bold_font,
+    #   data_arial_italic_font, thin_border, title_fill_range, apply_table_border, to_float
+
     reported_currency = final_output["summary"]["reported_currency"]
     bs_info = final_output["balance_sheet"]
     bs_char = bs_info["balance_sheet_characteristics"]
     bs_data = bs_info["data"]
     wb = writer.book
 
-    if "Balance Sht." not in wb.sheetnames:
-        wb.create_sheet("Balance Sht.")
-    ws = wb["Balance Sht."]
+    # Create or get the worksheet
+    sheet_name = "Balance Sht."
+    if sheet_name not in wb.sheetnames:
+        wb.create_sheet(sheet_name)
+    ws = wb[sheet_name]
     ws.freeze_panes = "F1"
+
     # Write and format the title
     title_cell = ws.cell(row=1, column=4, value=f"Balance Sheet (in mlns {reported_currency}):")
     title_cell.fill = label_fill
     title_cell.font = title_font
-    title_fill_range(ws, 1, 4,7)
+    title_fill_range(ws, 1, 4, 7)
     apply_table_border(ws, 1, 4, 7)
 
-    # Extract characteristics
+    # Extract CAGR values (if available)
     cagr_assets = bs_char.get("cagr_total_assets_percent")
     cagr_liabilities = bs_char.get("cagr_total_liabilities_percent")
     cagr_equity = bs_char.get("cagr_total_shareholders_equity_percent")
 
+    # Define the top-level sections and their labels
     top_sections = [
         ("assets", "Assets:"),
         ("liabilities", "Liabilities:"),
         ("shareholders_equity", "Shareholder's Equity:")
     ]
 
+    # Get the years in sorted order (assumes year keys are numeric strings)
     sorted_years = sorted(bs_data.keys(), key=lambda x: int(x))
     start_col_for_years = 6  # Column F
 
-    # Write and format years in row 3
+    # Write and format the header row with years (row 3)
     for i, year in enumerate(sorted_years):
         year_col = start_col_for_years + i
         y_cell = ws.cell(row=3, column=year_col, value=year)
@@ -935,71 +953,87 @@ def write_balance_sheet_sheet(writer, final_output):
         y_cell.font = label_font
         y_cell.border = thin_border
 
+    # Start writing section rows from row 5
     current_row = 5
-    section_rows = {}
 
     for section_key, section_label in top_sections:
-        # Main heading label in column A with label formatting
+        # Write the section label in column A with header formatting.
         sec_label_cell = ws.cell(row=current_row, column=1, value=section_label)
         sec_label_cell.fill = label_fill
         sec_label_cell.font = label_font
-        title_fill_range(ws, current_row, 1,5)
+        title_fill_range(ws, current_row, 1, 5)
         apply_table_border(ws, current_row, 1, 5)
-        section_rows[section_key] = current_row
+        total_row = current_row
 
-        first_year = sorted_years[0]
-        section_data = bs_data[first_year].get(section_key, {})
-        total_key = "total_" + section_key
+        # -- Write the total row for the section (if present) --
+        # In the new format, we expect that if a total is provided it is stored under the key
+        # that is the same as the section_key (e.g. "assets" for assets). Otherwise,
+        # there is no total row.
+        total_found = False
+        for year in sorted_years:
+            sec_data = bs_data.get(year, {}).get(section_key, {})
+            if section_key in sec_data:
+                total_found = True
+                break
 
-        # Write total values for each year (data fill)
-        for i, year in enumerate(sorted_years):
-            year_col = start_col_for_years + i
-            val = to_float(bs_data[year][section_key].get(total_key))
-            if val is not None:
-                val = val / 1_000_000
-            d_cell = ws.cell(row=current_row, column=year_col, value=val)
-            # This is the main heading's data row, so data fill it
-            d_cell.fill = data_fill
-            d_cell.font = data_arial_bold_font
-            d_cell.border = thin_border
-            # Apply number format
-            if isinstance(val, (int, float)):
-                d_cell.number_format = '#,##0'
-
-        # Apply CAGR to column E
-        if section_key == "assets":
-            if cagr_assets is not None:
-                ws.cell(row=section_rows["assets"], column=5, value=cagr_assets).number_format = '0.0%'
-        elif section_key == "liabilities":
-            if cagr_liabilities is not None:
-                ws.cell(row=section_rows["liabilities"], column=5, value=cagr_liabilities).number_format = '0.0%'
-        elif section_key == "shareholders_equity":
-            if cagr_equity is not None:
-                ws.cell(row=section_rows["shareholders_equity"], column=5, value=cagr_equity).number_format = '0.0%'
-
-        current_row += 1
-
-        # Breakdown items (no fill, no font)
-        breakdown_data = section_data.get("breakdown", {})
-        breakdown_rows = {}
-        for bkey in breakdown_data.keys():
-            # Breakdown label no fill
-            ws.cell(row=current_row, column=2, value=bkey)
-            breakdown_rows[bkey] = current_row
-            current_row += 1
-
-        # Write breakdown data (no fill)
-        for bkey, brow in breakdown_rows.items():
+        if total_found:
             for i, year in enumerate(sorted_years):
-                year_col = start_col_for_years + i
-                val = to_float(bs_data[year][section_key]["breakdown"].get(bkey))
+                sec_data = bs_data.get(year, {}).get(section_key, {})
+                # Use the value from the key equal to the section name (if available)
+                raw_val = sec_data.get(section_key)
+                val = to_float(raw_val) if raw_val is not None else None
                 if val is not None:
-                    val = val / 1_000_000
-                bdata_cell = ws.cell(row=brow, column=year_col, value=val)
+                    val = val / 1_000_000  # Convert to millions
+                d_cell = ws.cell(row=total_row, column=start_col_for_years + i, value=val)
+                d_cell.fill = data_fill
+                d_cell.font = data_arial_bold_font
+                d_cell.border = thin_border
+                if isinstance(val, (int, float)):
+                    d_cell.number_format = '#,##0'
+            # Apply the corresponding CAGR value in column E (if available)
+            if section_key == "assets" and cagr_assets is not None:
+                ws.cell(row=total_row, column=5, value=cagr_assets).number_format = '0.0%'
+            elif section_key == "liabilities" and cagr_liabilities is not None:
+                ws.cell(row=total_row, column=5, value=cagr_liabilities).number_format = '0.0%'
+            elif section_key == "shareholders_equity" and cagr_equity is not None:
+                ws.cell(row=total_row, column=5, value=cagr_equity).number_format = '0.0%'
+            current_row += 1  # Advance to the next row after the total row
+
+        # -- Determine breakdown keys while preserving original order --
+        # Instead of sorting keys alphabetically, we iterate over the years and add keys
+        # in the order they first appear.
+        breakdown_keys = []
+        for year in sorted_years:
+            sec_data = bs_data.get(year, {}).get(section_key, {})
+            if "breakdown" in sec_data and isinstance(sec_data["breakdown"], dict):
+                for key in sec_data["breakdown"]:
+                    if key not in breakdown_keys:
+                        breakdown_keys.append(key)
+            else:
+                for key in sec_data:
+                    if key != section_key and key not in breakdown_keys:
+                        breakdown_keys.append(key)
+
+        # -- Write breakdown rows --
+        for bkey in breakdown_keys:
+            # Write the breakdown label in column B (no special fill)
+            ws.cell(row=current_row, column=2, value=bkey)
+            # Write data for each year for this breakdown item
+            for i, year in enumerate(sorted_years):
+                sec_data = bs_data.get(year, {}).get(section_key, {})
+                # If a nested breakdown exists, use it; otherwise, read directly.
+                if "breakdown" in sec_data and isinstance(sec_data["breakdown"], dict):
+                    raw_val = sec_data["breakdown"].get(bkey)
+                else:
+                    raw_val = sec_data.get(bkey)
+                val = to_float(raw_val) if raw_val is not None else None
+                if val is not None:
+                    val = val / 1_000_000  # convert to millions
+                bdata_cell = ws.cell(row=current_row, column=start_col_for_years + i, value=val)
                 bdata_cell.font = data_arial_italic_font
-                # Apply number format
                 if isinstance(val, (int, float)):
                     bdata_cell.number_format = '#,##0'
+            current_row += 1
 
         # Add a blank line before the next section
         current_row += 1
@@ -1458,8 +1492,9 @@ if __name__ == "__main__":
     write_summary_sheet(writer, final_output)
     write_company_description(writer, final_output)
     write_analyses_sheet(writer, final_output)
+    write_balance_sheet_sheet(writer, final_output)
     #write_profit_desc_sheet(writer, final_output)
-    #write_balance_sheet_sheet(writer, final_output)
+    
     #write_qualities_sheet(writer, final_output)
     #write_industry_sheet(writer, final_output)
     #write_segmentation_sheet(writer, final_output)
