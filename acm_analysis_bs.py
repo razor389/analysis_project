@@ -1108,7 +1108,7 @@ def main():
     parser = argparse.ArgumentParser(description="Extract unified insurance metrics from FMP and SEC filings")
     parser.add_argument("ticker", type=str, help="Company ticker symbol")
     parser.add_argument("start_year", type=str, help="Start year (YYYY)")
-    parser.add_argument("--email", type=str, required=True, help="Your email for SEC user agent")
+    parser.add_argument("--email", type=str, required=True, help="Your email for SEC user agent", default= "rgranowski@gmail.com")
     parser.add_argument("--output", type=str, help="Output JSON file")
     parser.add_argument("--config", type=str, default="metrics_config.json",
                         help="Path to the metrics config file (JSON format)")
