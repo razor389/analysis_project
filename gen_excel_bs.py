@@ -1,4 +1,4 @@
-# gen_excel.py
+# gen_excel_bs.py
 
 import os
 import sys
@@ -103,9 +103,9 @@ def format_workbook(writer):
         ws.sheet_view.showGridLines = False
         
 def load_final_output(ticker):
-    file_path = os.path.join("output", f"{ticker}_yoy_consolidated.json")
+    file_path = os.path.join("output", f"{ticker}_yoy_consolidated_bs.json")
     if not os.path.exists(file_path):
-        print(f"Error: {file_path} does not exist. Please generate {ticker}_yoy_consolidated.json first.")
+        print(f"Error: {file_path} does not exist. Please generate {ticker}_yoy_consolidated_bs.json first.")
         sys.exit(1)
     with open(file_path, "r") as f:
         data = json.load(f)

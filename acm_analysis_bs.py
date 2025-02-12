@@ -17,6 +17,7 @@ import datetime
 # Import helper functions from your modules.
 from acm_analysis import calculate_cagr, process_qualities
 from financial_data_preprocessor import process_financial_statements
+from gen_excel_bs import generate_excel_for_ticker_year
 from unified_segmentation import get_filing_contents
 from utils import get_company_profile, get_current_market_cap_yahoo, get_current_quote_yahoo, get_yahoo_ticker, get_yearly_high_low_yahoo
 from industry_comp import get_industry_peers_with_stats
@@ -1189,6 +1190,12 @@ def main():
         
         # Now drop any years in unified_results before our desired start year.
         unified_results = {year: data for year, data in unified_results.items() if year >= start_year_int}
+        # Determine the most recent year for which we have unified data.
+        if unified_results:
+            end_year = max(unified_results.keys())
+        else:
+            end_year = current_year  # Fallback if no data is available
+
         ordered_results = dict(sorted(unified_results.items(), reverse=True))
         
         # Invert the output structure so that the top level keys are the metric categories.
@@ -1272,10 +1279,17 @@ def main():
             "qualities": qualities
         }
 
-        output_file = args.output or f"{ticker.lower()}_unified_insurance_metrics.json"
+        os.makedirs("output", exist_ok=True)
+        output_file = args.output or os.path.join("output", f"{ticker.lower()}_yoy_consolidated_bs.json")
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(final_output, f, indent=2)
-        logger.info(f"Unified results saved to {output_file}")
+        logger.info(f"Unified BS results saved to {output_file}")
+
+        try:
+            generate_excel_for_ticker_year(ticker, end_year)
+        except Exception as e:
+            print(f"Error generating Excel for {ticker} - {end_year}: {e}")
+
     except Exception as e:
         logger.error(f"Error: {e}")
         raise
