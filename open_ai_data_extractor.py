@@ -19,6 +19,7 @@ from acm_analysis import calculate_cagr
 from financial_data_preprocessor import process_financial_statements
 from unified_segmentation import get_filing_contents
 from utils import get_company_profile, get_current_market_cap_yahoo, get_current_quote_yahoo, get_yahoo_ticker, get_yearly_high_low_yahoo
+from industry_comp import get_industry_peers_with_stats
 
 # Load environment variables
 load_dotenv()
@@ -1233,7 +1234,14 @@ def main():
         profit_description_characteristics = compute_profit_description_characteristics(unified_results)
         inverted_output["profit_description"]["profit_description_characteristics"] = profit_description_characteristics
 
-        # Construct final output including the new summary section
+                # Fetch industry comparison data using the helper function
+        try:
+            industry_data = get_industry_peers_with_stats(ticker)
+        except Exception as e:
+            logger.error(f"Error fetching industry data for {ticker}: {e}")
+            industry_data = {}
+
+        # Construct final output including the new summary and industry comparison sections
         final_output = {
             "summary": summary,
             "company_description": {
@@ -1251,7 +1259,8 @@ def main():
                 "profit_description_characteristics": profit_description_characteristics,
                 "data": inverted_output["profit_description"]["data"]
             },
-            "segmentation": inverted_output["segmentation"]
+            "segmentation": inverted_output["segmentation"],
+            "industry_comparison": industry_data
         }
 
         output_file = args.output or f"{ticker.lower()}_unified_insurance_metrics.json"

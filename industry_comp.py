@@ -1,9 +1,12 @@
+# analysis_project/industry_comp.py
 import datetime
 import os
 import json
+import time
 import requests
 import logging
 from dotenv import load_dotenv
+from requests.exceptions import Timeout, RequestException
 
 from utils import get_current_quote_yahoo, get_yahoo_ticker, get_yearly_high_low_yahoo
 
@@ -25,8 +28,26 @@ def load_api_key():
         logger.error("Failed to load API key")
     return api_key
 
+def fetch_with_retry(url, params=None, timeout=10, retries=3):
+    """
+    Helper function to fetch data from a URL with a specified number of retries.
+    If the call fails due to a timeout or other RequestException, it will be retried.
+    """
+    for attempt in range(retries):
+        try:
+            logger.debug(f"Attempt {attempt + 1} for URL: {url}")
+            response = requests.get(url, params=params, timeout=timeout)
+            response.raise_for_status()
+            return response
+        except (Timeout, RequestException) as e:
+            logger.error(f"Attempt {attempt + 1} of {retries} failed for URL {url}: {e}")
+            if attempt < retries - 1:
+                time.sleep(2)  # wait 2 seconds before retrying
+    # If all attempts fail, raise an exception
+    raise RequestException(f"All {retries} attempts failed for URL {url}")
+
 def get_financial_data(ticker, api_key):
-    """Fetch all required financial statements for a ticker."""
+    """Fetch all required financial statements for a ticker with retries."""
     logger.info(f"Fetching financial data for ticker: {ticker}")
     base_url = "https://financialmodelingprep.com/api/v3"
     
@@ -38,18 +59,18 @@ def get_financial_data(ticker, api_key):
     }
     
     data = {}
+    timeout_value = 10
     for key, url in endpoints.items():
-        logger.debug(f"Requesting data from endpoint: {key}")
-        response = requests.get(url, params={"apikey": api_key})
-        if response.status_code == 200:
-            if key == "quote":
-                data[key] = response.json()[0] if response.json() else None
-            else:
-                data[key] = response.json()[0] if response.json() else None
+        logger.debug(f"Requesting {key} data from endpoint: {url}")
+        try:
+            response = fetch_with_retry(url, params={"apikey": api_key}, timeout=timeout_value, retries=3)
+            json_data = response.json()
+            # For this example, we assume each endpoint returns a list.
+            data[key] = json_data[0] if json_data else None
             logger.debug(f"Successfully retrieved {key} data")
-        else:
-            logger.error(f"Failed to fetch {key} data. Status code: {response.status_code}")
-    
+        except RequestException as e:
+            logger.error(f"Failed to fetch {key} data for ticker {ticker} after retries: {e}")
+            data[key] = None
     return data
 
 def calculate_statistics(ticker, financial_data):
@@ -59,27 +80,24 @@ def calculate_statistics(ticker, financial_data):
         ic = financial_data.get('ic', {})
         bs = financial_data.get('bs', {})
         cf = financial_data.get('cf', {})
-        
         profile = financial_data.get('profile', {})
         
         yahoo_ticker = get_yahoo_ticker(profile)
         current_stock_price = get_current_quote_yahoo(yahoo_ticker)
+        
         # Basic financial metrics
         shares_outstanding = ic.get('weightedAverageShsOut', 0)
         revenues = ic.get('revenue', 0)
         net_profit = ic.get('netIncome', 0)
         ebit = ic.get('operatingIncome', 0)
         shareholder_equity = bs.get('totalStockholdersEquity', 0)
-        
         logger.debug(f"Base metrics - Price: {current_stock_price}, Shares: {shares_outstanding}, Revenue: {revenues}")
         
         # Calculate liabilities and debt
         total_liabilities = bs.get('totalLiabilities', 0)
         capital_lease_obligations = bs.get('capitalLeaseObligations', 0)
         total_debt = total_liabilities - capital_lease_obligations
-        
-        lt_debt =  (bs.get("longTermDebt") or 0) + (bs.get("shortTermDebt") or 0) - (bs.get("capitalLeaseObligations") or 0)
-        
+        lt_debt = (bs.get("longTermDebt") or 0) + (bs.get("shortTermDebt") or 0) - (bs.get("capitalLeaseObligations") or 0)
         logger.debug(f"Debt calculations - Total debt: {total_debt}, LT debt: {lt_debt}")
         
         # Operating Statistics Calculations
@@ -91,7 +109,6 @@ def calculate_statistics(ticker, financial_data):
         sti = bs.get('shortTermInvestments', 0)
         addback = cash_equiv + sti
         years_payback = ((lt_debt - addback) / net_profit) if net_profit else None
-        
         logger.debug(f"Operating metrics - Margin: {operating_margin}, ROC: {roc}, Years payback: {years_payback}")
         
         # Market Statistics Calculations
@@ -101,10 +118,10 @@ def calculate_statistics(ticker, financial_data):
         pe_ratio = current_stock_price / operating_eps if operating_eps else 0
         
         statement_date = ic.get('date')
-        statement_year = int(statement_date.split('-')[0]) if statement_date else datetime.now().year
+        statement_year = int(statement_date.split('-')[0]) if statement_date else datetime.datetime.now().year
         
         yearly_high, yearly_low = get_yearly_high_low_yahoo(yahoo_ticker, statement_year)
-        average_price = (yearly_high + yearly_low) / 2 if yearly_high is not None and yearly_low is not None else current_stock_price
+        average_price = (yearly_high + yearly_low) / 2 if (yearly_high is not None and yearly_low is not None) else current_stock_price
         
         dividends_paid = -1 * cf.get('dividendsPaid', 0)
         dividends_per_share = dividends_paid / shares_outstanding if shares_outstanding else 0
@@ -136,7 +153,7 @@ def calculate_statistics(ticker, financial_data):
     except Exception as e:
         logger.error(f"Error calculating statistics for {ticker}: {str(e)}", exc_info=True)
         return None
-    
+
 def check_adr_mapping(ticker, peers, adr_mapping):
     """
     Check if any peer tickers map to the same ordinary shares as the input ticker.
@@ -147,12 +164,9 @@ def check_adr_mapping(ticker, peers, adr_mapping):
     
     filtered_peers = []
     for peer in peers:
-        # Skip if peer is ordinary share and we have its ADR
         if peer in ord_to_adr and ord_to_adr[peer] == ticker:
             continue
-        # Keep peer if it's not related to input ticker
         filtered_peers.append(peer)
-    
     return filtered_peers
 
 def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file=False):
@@ -167,18 +181,19 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file=False):
     with open('adr_to_ord_mapping.json', 'r') as f:
         adr_mapping = json.load(f)
     
-    # First get company industry
+    # Get company profile
     profile_url = f"https://financialmodelingprep.com/api/v3/profile/{ticker}"
-    response = requests.get(profile_url, params={"apikey": api_key})
-    if response.status_code != 200:
-        logger.error(f"Error fetching profile. Status code: {response.status_code}")
-        raise Exception(f"Error fetching profile: {response.status_code}")
-    
+    try:
+        response = fetch_with_retry(profile_url, params={"apikey": api_key}, timeout=10, retries=3)
+    except RequestException as e:
+        logger.error(f"Error fetching profile for {ticker}: {e}")
+        raise
+
     profile = response.json()[0]
     industry = profile.get("industry")
     logger.info(f"Industry identified: {industry}")
     
-    # Get peers
+    # Get peers via the screener endpoint
     screener_url = "https://financialmodelingprep.com/api/v3/stock-screener"
     params = {
         "industry": industry,
@@ -186,12 +201,12 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file=False):
         "isActivelyTrading": True,
         "apikey": api_key
     }
-    
-    response = requests.get(screener_url, params=params)
-    if response.status_code != 200:
-        logger.error(f"Error fetching peers. Status code: {response.status_code}")
-        raise Exception(f"Error fetching peers: {response.status_code}")
-    
+    try:
+        response = fetch_with_retry(screener_url, params=params, timeout=10, retries=3)
+    except RequestException as e:
+        logger.error(f"Error fetching peers for {ticker}: {e}")
+        raise
+
     peers = response.json()
     sorted_peers = sorted(peers, key=lambda x: x.get('marketCap', 0), reverse=True)
     
@@ -212,7 +227,6 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file=False):
             seen_names.add(stock_name)
     
     top_peers = [stock['symbol'] for stock in unique_results[:num_comps]]
-    # Check for and remove duplicate ordinary/ADR pairs
     top_peers = check_adr_mapping(ticker, top_peers, adr_mapping)
     logger.info(f"Selected peers after ADR check: {', '.join(top_peers)}")
     
@@ -250,8 +264,7 @@ def main():
     logger.info(f"Starting industry comparison analysis for ticker: {ticker}")
     try:
         result = get_industry_peers_with_stats(ticker)
-        print(f"Analysis complete.")
-        print("\nSummary:")
+        print("Analysis complete.\nSummary:")
         print(json.dumps(result, indent=2))
         logger.info("Industry comparison analysis completed successfully")
     except Exception as e:
