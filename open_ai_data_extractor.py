@@ -15,7 +15,7 @@ from urllib3.util.retry import Retry
 import datetime
 
 # Import helper functions from your modules.
-from acm_analysis import calculate_cagr
+from acm_analysis import calculate_cagr, process_qualities
 from financial_data_preprocessor import process_financial_statements
 from unified_segmentation import get_filing_contents
 from utils import get_company_profile, get_current_market_cap_yahoo, get_current_quote_yahoo, get_yahoo_ticker, get_yearly_high_low_yahoo
@@ -1111,6 +1111,8 @@ def main():
     parser.add_argument("--output", type=str, help="Output JSON file")
     parser.add_argument("--config", type=str, default="metrics_config.json",
                         help="Path to the metrics config file (JSON format)")
+    parser.add_argument("--ignore_qualities", action="store_true",
+                    help="Skip processing qualities analysis")
     args = parser.parse_args()
     
     ticker = args.ticker.upper()
@@ -1241,7 +1243,13 @@ def main():
             logger.error(f"Error fetching industry data for {ticker}: {e}")
             industry_data = {}
 
-        # Construct final output including the new summary and industry comparison sections
+        # Process qualities using the same function as in acm_analysis unless flag is set
+        if not args.ignore_qualities:
+            qualities = process_qualities(ticker, ignore_qualities=args.ignore_qualities, debug=False)
+        else:
+            qualities = ""
+
+        # Construct final output including qualities
         final_output = {
             "summary": summary,
             "company_description": {
@@ -1260,7 +1268,8 @@ def main():
                 "data": inverted_output["profit_description"]["data"]
             },
             "segmentation": inverted_output["segmentation"],
-            "industry_comparison": industry_data
+            "industry_comparison": industry_data,
+            "qualities": qualities
         }
 
         output_file = args.output or f"{ticker.lower()}_unified_insurance_metrics.json"
