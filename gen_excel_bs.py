@@ -557,12 +557,26 @@ def write_analyses_sheet(writer, final_output):
 
 def write_profit_desc_sheet(writer, final_output):
     """
-    Write the profit description sheet with updated handling for operating earnings breakdowns
+    Write the profit description sheet using the new profit_description data format.
+    This version dynamically gathers breakdown keys for those metrics that are provided
+    as dictionaries (with a "total" and a "breakdown" section). It is written to be flexible
+    so that different companies (with different breakdown items) are handled automatically.
+    
+    Note: The operating margin breakdown items "pretax_combined_ratio", 
+          "pretax_insurance_yield_on_equity", and "pretax_return_on_equity" are assumed to be 
+          percentages (e.g. 0.86 means 86.0%) and are not divided by 1,000,000.
     
     Parameters:
-    writer: ExcelWriter object
-    final_output: Dictionary containing the full output data
+        writer: ExcelWriter object
+        final_output: Dictionary containing the full output data.
+                     Expected to have final_output["profit_description"] with keys:
+                         - "profit_description_characteristics": a dict with overall CAGR values
+                           and breakdown CAGR dictionaries (e.g. "cagr_gross_revenues_breakdown_percent")
+                         - "data": a dict with keys (years) whose values are profit metrics
+                           e.g. "gross_revenues", "investment_income", "internal_costs",
+                           "operating_margin", "external_costs", "earnings", etc.
     """
+    # Get reported currency, profit description characteristics and data by year
     reported_currency = final_output["summary"]["reported_currency"]
     pd_info = final_output["profit_description"]
     pchar = pd_info["profit_description_characteristics"]
@@ -576,252 +590,168 @@ def write_profit_desc_sheet(writer, final_output):
     ws.freeze_panes = "D1"
 
     # Write and format the title
-    title_cell = ws.cell(row=1, column=4, value=f"Description & Analysis of Profitability (in mlns {reported_currency})")
+    title_text = f"Description & Analysis of Profitability (in mlns {reported_currency})"
+    title_cell = ws.cell(row=1, column=4, value=title_text)
     title_cell.fill = label_fill
     title_cell.font = title_font
     title_fill_range(ws, 1, 3, 10)
     apply_table_border(ws, 1, 3, 10)
 
-    # Define the order of metrics to display
+    # Define the metric order and labels based on the new format.
     metrics_order = [
-        "revenues",
-        "expenses",
-        "ebitda",
-        "amortization_depreciation",
-        "free_cash_flow",
-        "capex",
-        "operating_earnings",
+        "gross_revenues",
+        "investment_income",
+        "internal_costs",
+        "operating_margin",
         "external_costs",
         "earnings",
-        "earnings_percent_revenue",
-        "dividend_paid",
-        "dividend_paid_pct_fcf",
-        "share_buybacks_from_stmt_cf",
-        "net_biz_acquisition"
+        "equity_employed",
+        "shares_repurchased"
     ]
-
-    # Define metric labels mapping
     metric_labels = {
-        "revenues": "Net Revenues:",
-        "expenses": "Internal Costs:",
-        "ebitda": "EBITDA:",
-        "free_cash_flow": "Free Cash Flow:",
-        "operating_earnings": "Operating Margin:",
+        "gross_revenues": "Gross Revenues:",
+        "investment_income": "Investment Income:",
+        "internal_costs": "Internal Costs:",
+        "operating_margin": "Operating Margin:",
         "external_costs": "External Costs:",
-        "dividend_paid": "Dividend Paid:",
-        "dividend_paid_pct_fcf": "Dividend Paid % of FCF:",
-        "share_buybacks_from_stmt_cf": "Share Buybacks (Stmt of CFs):",
-        "net_biz_acquisition": "Net Biz Acquisitions:",
-        "amortization_depreciation": "Amortization & Depreciation:",
-        "capex": "Capital Expenditures:",
         "earnings": "Earnings:",
-        "earnings_percent_revenue": "Earnings % of Revenue:"
+        "equity_employed": "Equity Employed:",
+        "shares_repurchased": "Shares Repurchased:"
     }
 
-    percent_metrics = ["dividend_paid_pct_fcf", "earnings_percent_revenue"]
+    # List of metrics that are percentages (if any)
+    percent_metrics = []  # In the new format, most numbers are monetary
 
-    current_row = 5  # Starting row for metrics
-    metric_rows = {}  # To track the row number for each metric
-    breakdown_rows = {}  # To track the row numbers for each breakdown item
-
-    # Step 1: Collect all unique breakdowns across all years
-    all_revenue_breakdowns = set()
-    all_expense_breakdowns = set()
-    all_operating_earnings_breakdowns = set()
-    all_external_costs_breakdowns = set()
-    
+    # STEP 1: Collect all unique breakdown keys for those metrics that come as dicts with a breakdown.
+    breakdown_source_metrics = ["gross_revenues", "internal_costs", "operating_margin", "external_costs"]
+    breakdown_keys = {metric: set() for metric in breakdown_source_metrics}
     for year_data in pdata.values():
-        # Handle revenue breakdowns
-        revenues = year_data.get("revenues", {})
-        if revenue_breakdown := revenues.get("breakdown", {}):
-            all_revenue_breakdowns.update(revenue_breakdown.keys())
-            
-        # Handle expense breakdowns
-        expenses = year_data.get("expenses", {})
-        if expense_breakdown := expenses.get("breakdown", {}):
-            all_expense_breakdowns.update(expense_breakdown.keys())
-            
-        # Handle operating earnings breakdowns
-        operating_earnings = year_data.get("operating_earnings", {})
-        if operating_breakdown := operating_earnings.get("breakdown", {}):
-            all_operating_earnings_breakdowns.update(operating_breakdown.keys())
-            
-        # Handle external costs breakdowns
-        external_costs = year_data.get("external_costs", {})
-        if external_costs_breakdown := external_costs.get("breakdown", {}):
-            all_external_costs_breakdowns.update(external_costs_breakdown.keys())
+        for metric in breakdown_source_metrics:
+            mdata = year_data.get(metric)
+            if isinstance(mdata, dict):
+                bd = mdata.get("breakdown", {})
+                if bd:
+                    breakdown_keys[metric].update(bd.keys())
 
-    # Step 2: Write the metrics and their labels
+    # STEP 2: Write the metric labels and, when available, the breakdown labels.
+    current_row = 5  # Starting row for metric rows
+    metric_rows = {}      # Track the row for each metric label row
+    breakdown_rows = {}   # Track the row for each breakdown item; key = (metric, breakdown_key)
     for metric in metrics_order:
-        # Get the label from the mapping
         label = metric_labels.get(metric, metric.capitalize() + ":")
-
-        # Write the metric label cell with formatting
-        label_cell = ws.cell(row=current_row, column=1, value=label)
-        label_cell.fill = label_fill
-        label_cell.font = label_font
-        # Fill columns A to C for the label
+        # Write the main metric label in column 1 (across columns 1-3 for formatting)
         for col in range(1, 4):
-            cell = ws.cell(row=current_row, column=col)
+            cell = ws.cell(row=current_row, column=col, value=label if col == 1 else None)
             cell.fill = label_fill
             cell.font = label_font
         metric_rows[metric] = current_row
         apply_table_border(ws, current_row, 1, 3)
         current_row += 1
 
-        # Handle breakdowns based on metric type
-        if metric == "revenues" and all_revenue_breakdowns:
-            for bkey in sorted(all_revenue_breakdowns):
-                breakdown_cell = ws.cell(row=current_row, column=2, value=bkey)
-                breakdown_cell.font = Font(italic=True)
-                breakdown_rows[(metric, bkey)] = current_row
-                current_row += 1
-        elif metric == "expenses" and all_expense_breakdowns:
-            for bkey in sorted(all_expense_breakdowns):
-                breakdown_cell = ws.cell(row=current_row, column=2, value=bkey)
-                breakdown_cell.font = Font(italic=True)
-                breakdown_rows[(metric, bkey)] = current_row
-                current_row += 1
-        elif metric == "operating_earnings" and all_operating_earnings_breakdowns:
-            for bkey in sorted(all_operating_earnings_breakdowns):
-                breakdown_cell = ws.cell(row=current_row, column=2, value=bkey)
-                breakdown_cell.font = Font(italic=True)
-                breakdown_rows[(metric, bkey)] = current_row
-                current_row += 1
-        elif metric == "external_costs" and all_external_costs_breakdowns:
-            for bkey in sorted(all_external_costs_breakdowns):
-                breakdown_cell = ws.cell(row=current_row, column=2, value=bkey)
-                breakdown_cell.font = Font(italic=True)
+        # If this metric has a breakdown (as discovered above), write each breakdown item as a sub-row.
+        if metric in breakdown_keys and breakdown_keys[metric]:
+            for bkey in sorted(breakdown_keys[metric]):
+                bd_cell = ws.cell(row=current_row, column=2, value=bkey)
+                bd_cell.font = Font(italic=True)
                 breakdown_rows[(metric, bkey)] = current_row
                 current_row += 1
 
-    # Step 3: Write Year Headers
+    # STEP 3: Write Year Headers (starting at column D)
     sorted_years = sorted(pdata.keys(), key=lambda x: int(x))
-    start_col_for_years = 4  # Starting at column D
-
+    start_col_for_years = 4  # Column D
     for i, year in enumerate(sorted_years):
-        year_col = start_col_for_years + i * 2  # Each year takes 2 columns
+        year_col = start_col_for_years + i * 2  # Each year uses two columns: one for value, one for percentage
         y_cell = ws.cell(row=3, column=year_col, value=year)
         y_cell.fill = label_fill
         y_cell.font = label_font
         y_cell.border = thin_border
         y_cell.alignment = center_alignment
-
-        # Add hyperlink if filing URL exists for this year
+        # Add hyperlink to filing URL if available
         filing_url = pdata.get(year, {}).get("filing_url")
         if filing_url:
             y_cell.hyperlink = filing_url
             y_cell.font = Font(name="Times New Roman", size=10, bold=True, italic=True, underline="single", color="0000FF")
-            
-    # Step 4: Write Metric Values and Breakdown Values
-    for i, year in enumerate(sorted_years):
-        year_col = start_col_for_years + i * 2  # Column for the value
-        year_data = pdata[year]
-        
-        for metric in metrics_order:
-            metric_val = year_data.get(metric)
-            metric_row = metric_rows.get(metric)
 
-            if metric_val is None:
+    # Define the set of operating_margin breakdown keys that should be treated as percentages.
+    operating_margin_pct_keys = {"pretax_combined_ratio", "pretax_insurance_yield_on_equity", "pretax_return_on_equity"}
+
+    # STEP 4: Write Metric Values and Breakdown Values for each year.
+    for i, year in enumerate(sorted_years):
+        year_col = start_col_for_years + i * 2  # Column for the main value
+        year_data = pdata[year]
+        for metric in metrics_order:
+            mdata = year_data.get(metric)
+            if mdata is None:
                 continue
 
-            if isinstance(metric_val, dict) and (
-                ("total_" + metric) in metric_val  # for operating_earnings
-                or ("total_" + metric.replace("_earnings", "")) in metric_val  # for revenues/external_costs
-            ):
-                # Handle metrics with breakdowns (including operating earnings)
-                # Handle both operating_earnings and other metrics
-                total_key = "total_operating_earnings" if metric == "operating_earnings" else "total_" + metric.replace("_earnings", "")
-                
-                if total_key in metric_val:
-                    val = to_float(metric_val[total_key])
-                    if val is not None:
-                        val = val / 1_000_000
-                    cell = ws.cell(row=metric_row, column=year_col, value=val)
-                    cell.fill = data_fill
-                    cell.font = Font(name="Arial", italic=True)
-                    cell.number_format = '#,##0'
-                    cell.border = thin_border
+            # If the value is given as a dict with a "total" field (and possibly a breakdown)
+            if isinstance(mdata, dict) and "total" in mdata:
+                val = to_float(mdata["total"])
+                if val is not None:
+                    # For monetary metrics, divide by 1,000,000
+                    val = val / 1_000_000
+                cell = ws.cell(row=metric_rows[metric], column=year_col, value=val)
+                cell.fill = data_fill
+                cell.font = Font(name="Arial", italic=True)
+                cell.number_format = '#,##0'
+                cell.border = thin_border
 
-                # Write breakdown items
-                breakdown_items = metric_val.get("breakdown", {})
+                # Write breakdown values if present
+                bd_items = mdata.get("breakdown", {})
                 for (m, bkey), brow in breakdown_rows.items():
-                    if m == metric and bkey in breakdown_items:
-                        breakdown_val = breakdown_items[bkey]
-                        if breakdown_val is not None:
-                            breakdown_val = to_float(breakdown_val)
-                            if breakdown_val is not None:
-                                breakdown_val = breakdown_val / 1_000_000
-                            bdata_cell = ws.cell(row=brow, column=year_col, value=breakdown_val)
-                            bdata_cell.font = data_arial_italic_font
-                            bdata_cell.number_format = '#,##0'
-                            
-                            # Add appropriate CAGR values
-                            if metric == "revenues":
-                                cagr_key = f"cagr_revenues_{bkey}_percent"
-                                cagr_value = pchar.get("cagr_revenues_breakdown_percent", {}).get(cagr_key)
-                                if cagr_value is not None:
-                                    cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
-                                    cagr_cell.font = Font(name="Arial", italic=True, size=8)
-                                    cagr_cell.number_format = '0.0%'
-                            elif metric == "operating_earnings":
-                                cagr_key = f"cagr_operating_earnings_{bkey}_percent"
-                                cagr_value = pchar.get("cagr_operating_earnings_breakdown_percent", {}).get(cagr_key)
-                                if cagr_value is not None:
-                                    cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
-                                    cagr_cell.font = Font(name="Arial", italic=True, size=8)
-                                    cagr_cell.number_format = '0.0%'
+                    if m == metric and bkey in bd_items:
+                        bd_val = to_float(bd_items[bkey])
+                        if bd_val is not None:
+                            if metric == "operating_margin" and bkey in operating_margin_pct_keys:
+                                # These values are percentages; do not divide.
+                                display_val = bd_val
+                                number_format = '0.0%'
+                            else:
+                                display_val = bd_val / 1_000_000
+                                number_format = '#,##0'
+                        else:
+                            display_val = None
+                            number_format = '#,##0'
+                        bd_cell = ws.cell(row=brow, column=year_col, value=display_val)
+                        bd_cell.font = data_arial_italic_font
+                        bd_cell.number_format = number_format
 
+                        # Write CAGR values for this breakdown if available.
+                        if metric in breakdown_source_metrics:
+                            cagr_map = {
+                                "gross_revenues": ("cagr_gross_revenues_breakdown_percent", "cagr_gross_revenues_{}_percent"),
+                                "internal_costs": ("cagr_internal_costs_breakdown_percent", "cagr_internal_costs_{}_percent"),
+                                "operating_margin": ("cagr_operating_margin_breakdown_percent", "cagr_operating_margin_{}_percent"),
+                                "external_costs": ("cagr_external_costs_breakdown_percent", "cagr_external_costs_{}_percent")
+                            }
+                            base, pattern = cagr_map[metric]
+                            cagr_key = pattern.format(bkey)
+                            cagr_value = pchar.get(base, {}).get(cagr_key)
+                            if cagr_value is not None:
+                                cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
+                                cagr_cell.font = Font(name="Arial", italic=True, size=8)
+                                cagr_cell.number_format = '0.0%'
             else:
-                # Handle metrics without breakdowns
-                val = to_float(metric_val)
+                # For metrics provided as plain numbers (e.g. investment_income, earnings, etc.)
+                val = to_float(mdata)
                 if val is not None and metric not in percent_metrics:
                     val = val / 1_000_000
-                cell = ws.cell(row=metric_row, column=year_col, value=val)
+                cell = ws.cell(row=metric_rows[metric], column=year_col, value=val)
                 cell.fill = data_fill
                 cell.font = Font(name="Arial", italic=True)
                 cell.border = thin_border
-                if metric not in percent_metrics:
-                    cell.number_format = '#,##0'
-                else:
-                    cell.number_format = '0.0%'
+                cell.number_format = '#,##0' if metric not in percent_metrics else '0.0%'
 
-    # Step 5: Write CAGR Values
+    # STEP 5: Write overall CAGR values (for the main metric rows).
     cagr_map = {
-        "revenues": "cagr_revenues_percent",
-        "expenses": "cagr_total_expenses_percent",
-        "ebitda": "cagr_ebitda_percent",
-        "free_cash_flow": "cagr_free_cash_flow_percent",
-        "operating_earnings": "cagr_operating_earnings_percent",
-        "external_costs": "cagr_total_external_costs_percent",
+        "gross_revenues": "cagr_gross_revenues_percent",
+        "investment_income": "cagr_investment_income_percent",
+        "internal_costs": "cagr_internal_costs_percent",
+        "operating_margin": "cagr_operating_margin_percent",
+        "external_costs": "cagr_external_costs_percent",
         "earnings": "cagr_earnings_percent"
+        # Additional metrics may be added here if applicable.
     }
-
-    # Handle expense breakdown CAGRs
-    expense_cagr_map = {
-        "cost_of_revenue": "cagr_cost_of_revenue_percent",
-        "research_and_development": "cagr_research_and_development_percent",
-        "selling_marketing_general_admin": "cagr_selling_marketing_general_admin_percent"
-    }
-
-    # Write expense breakdown CAGRs
-    for (metric, bkey), brow in breakdown_rows.items():
-        if metric == "expenses" and bkey in expense_cagr_map:
-            cagr_key = expense_cagr_map[bkey]
-            cagr_value = pchar.get(cagr_key)
-            if cagr_value is not None:
-                cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
-                cagr_cell.font = Font(name="Arial", italic=True, size=8)
-                cagr_cell.number_format = '0.00%'
-        elif metric == "external_costs":
-            # Handle external costs breakdown CAGRs
-            cagr_key = f"cagr_external_costs_{bkey}_percent"
-            cagr_value = pchar.get("cagr_external_costs_breakdown_percent", {}).get(cagr_key)
-            if cagr_value is not None:
-                cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
-                cagr_cell.font = Font(name="Arial", italic=True, size=8)
-                cagr_cell.number_format = '0.00%'
-
     for metric, cagr_key in cagr_map.items():
         cagr_value = pchar.get(cagr_key)
         if cagr_value is not None and metric in metric_rows:
@@ -830,70 +760,39 @@ def write_profit_desc_sheet(writer, final_output):
             cagr_cell.font = Font(name="Arial", italic=True, size=8)
             cagr_cell.number_format = '0.00%'
 
-    # Step 6: Compute and Write Percentages
-    revenues_row = metric_rows.get("revenues")
-    expense_breakdowns = ["cost_of_revenue", "research_and_development", "selling_marketing_general_admin"]
-    top_metrics = ["ebitda", "operating_earnings", "earnings"]  # Metrics that get percentage calculations
-
+    # STEP 6: Compute and Write Percentages.
+    # We assume that percentages for all breakdowns and top-level metrics are relative to gross revenues.
+    base_row = metric_rows.get("gross_revenues")
+    if base_row is None:
+        # If there is no gross_revenues row, skip percentage calculations.
+        return
     for i, year in enumerate(sorted_years):
         year_col = start_col_for_years + i * 2
-        rev_val = ws.cell(row=revenues_row, column=year_col).value
+        rev_val = ws.cell(row=base_row, column=year_col).value
         if rev_val is None or rev_val == 0:
             continue
 
-        # Calculate percentages for all revenue breakdowns
-        for bkey in all_revenue_breakdowns:
-            br_key = ("revenues", bkey)
-            if br_key in breakdown_rows:
-                brow = breakdown_rows[br_key]
-                metric_val = ws.cell(row=brow, column=year_col).value
-                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
-                    percent = (metric_val / rev_val) * 100
-                    percent_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
-                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+        # For every breakdown row (across any metric that has a breakdown), compute its percentage of gross revenues.
+        for (m, bkey), brow in breakdown_rows.items():
+            metric_val = ws.cell(row=brow, column=year_col).value
+            # For breakdowns that are already percentages (e.g. operating margin pct values), skip this calculation.
+            if m == "operating_margin" and bkey in operating_margin_pct_keys:
+                continue
+            if isinstance(metric_val, (int, float)) and rev_val != 0:
+                percent = (metric_val / rev_val) * 100
+                pct_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
+                pct_cell.font = Font(name="Arial", italic=True, size=8)
 
-        # Calculate percentages for expense breakdowns
-        for bkey in expense_breakdowns:
-            br_key = ("expenses", bkey)
-            if br_key in breakdown_rows:
-                brow = breakdown_rows[br_key]
-                metric_val = ws.cell(row=brow, column=year_col).value
-                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
-                    percent = (metric_val / rev_val) * 100
-                    percent_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
-                    percent_cell.font = Font(name="Arial", italic=True, size=8)
-
-        # Calculate percentages for external costs breakdowns
-        for bkey in all_external_costs_breakdowns:
-            br_key = ("external_costs", bkey)
-            if br_key in breakdown_rows:
-                brow = breakdown_rows[br_key]
-                metric_val = ws.cell(row=brow, column=year_col).value
-                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
-                    percent = (metric_val / rev_val) * 100
-                    percent_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
-                    percent_cell.font = Font(name="Arial", italic=True, size=8)
-
-        # Calculate percentages for operating earnings breakdowns
-        for bkey in all_operating_earnings_breakdowns:
-            br_key = ("operating_earnings", bkey)
-            if br_key in breakdown_rows:
-                brow = breakdown_rows[br_key]
-                metric_val = ws.cell(row=brow, column=year_col).value
-                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
-                    percent = (metric_val / rev_val) * 100
-                    percent_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
-                    percent_cell.font = Font(name="Arial", italic=True, size=8)
-
-        # Calculate percentages for top metrics
+        # Calculate percentages for top-level metrics (compared to gross revenues)
+        top_metrics = ["investment_income", "internal_costs", "operating_margin", "external_costs", "earnings"]
         for tm in top_metrics:
             if tm in metric_rows:
                 tm_row = metric_rows[tm]
                 metric_val = ws.cell(row=tm_row, column=year_col).value
-                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
+                if isinstance(metric_val, (int, float)) and rev_val != 0:
                     percent = (metric_val / rev_val) * 100
-                    percent_cell = ws.cell(row=tm_row, column=year_col + 1, value=f"{percent:.1f}%")
-                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+                    pct_cell = ws.cell(row=tm_row, column=year_col + 1, value=f"{percent:.1f}%")
+                    pct_cell.font = Font(name="Arial", italic=True, size=8)
 
 def write_balance_sheet_sheet(writer, final_output):
     """
@@ -1135,7 +1034,7 @@ def write_industry_sheet(writer, final_output):
     final_output: Dictionary containing the full output data including industry statistics
     """
     # Early return if qualities is None/null
-    if not final_output.get("industry"):
+    if not final_output.get("industry_comparison"):
         return
     
     wb = writer.book
@@ -1145,7 +1044,7 @@ def write_industry_sheet(writer, final_output):
         wb.create_sheet("Industry")
     ws = wb["Industry"]
 
-    industry_data = final_output["industry"]
+    industry_data = final_output["industry_comparison"]
     industry_name = final_output["summary"]["industry"]
     # Write and format the "Industry Overview" title
     title_cell = ws.cell(row=1, column=6, value=f"Industry Comparison: {industry_name}")
@@ -1269,20 +1168,20 @@ def write_industry_sheet(writer, final_output):
 
 def write_segmentation_sheet(writer, final_output):
     """
-    Write the Segmentation sheet showing revenue breakdown by business segment over time
+    Write the Segmentation sheet showing revenue breakdown by business segment over time.
     
     Parameters:
-    writer: ExcelWriter object
-    final_output: Dictionary containing the full output data including segmentation data
+      writer: ExcelWriter object
+      final_output: Dictionary containing the full output data including segmentation data.
     """
     # Early return if segmentation data is not present
     if not final_output.get("segmentation"):
         return
-    
+
     reported_currency = final_output["summary"]["reported_currency"]
-    segmentation_data = final_output["segmentation"]
+    segmentation_data = final_output["segmentation"]["data"]
     wb = writer.book
-    
+
     # Create the sheet if it doesn't exist
     if "Segmentation" not in wb.sheetnames:
         wb.create_sheet("Segmentation")
@@ -1297,26 +1196,28 @@ def write_segmentation_sheet(writer, final_output):
     apply_table_border(ws, 1, 3, 7)
     title_fill_range(ws, 1, 3, 7)
 
-    # Get sorted years and all unique segments
+    # Get sorted years and all unique segments from the "breakdown" dictionaries
     sorted_years = sorted(segmentation_data.keys(), key=lambda x: int(x))
     all_segments = set()
-    for year_data in segmentation_data.values():
-        all_segments.update(year_data.keys())
+    for year in sorted_years:
+        # For each year, get the breakdown sub-dictionary
+        breakdown = segmentation_data[year].get("breakdown", {})
+        all_segments.update(breakdown.keys())
     sorted_segments = sorted(all_segments)
 
-    # Write year headers starting at row 3
+    # Write year headers starting at row 3 (starting at column B)
     for i, year in enumerate(sorted_years):
-        year_col = i + 2  # Start at column B
+        year_col = i + 2  # Column B is index 2
         y_cell = ws.cell(row=3, column=year_col, value=year)
         y_cell.fill = label_fill
         y_cell.font = label_font
         y_cell.border = thin_border
         y_cell.alignment = center_alignment
 
-    # Write segment data
+    # Write segment data for each segment (one segment per row)
     current_row = 4
     for segment in sorted_segments:
-        # Write segment name in column A
+        # Write the segment name in column A
         segment_cell = ws.cell(row=current_row, column=1, value=segment)
         segment_cell.font = label_font
         segment_cell.fill = label_fill
@@ -1324,56 +1225,72 @@ def write_segmentation_sheet(writer, final_output):
 
         # Write values for each year
         for i, year in enumerate(sorted_years):
-            year_col = i + 2  # Start at column B
-            value = segmentation_data[year].get(segment)
-            
-            # Create cell and apply styling regardless of value
+            year_col = i + 2  # Data starts at column B
+            # Retrieve the breakdown for the given year and get the segment value
+            breakdown = segmentation_data[year].get("breakdown", {})
+            value = breakdown.get(segment)
+
+            # Create the cell and apply the common styling
             value_cell = ws.cell(row=current_row, column=year_col)
             value_cell.fill = data_fill
             value_cell.font = data_arial_font
             value_cell.border = thin_border
             value_cell.alignment = right_alignment
-            
+
             if value is not None:
-                # Convert to millions and set value
-                value = value / 1_000_000
-                value_cell.value = value
+                # Convert the value to millions and set the cell value/formatting
+                value_cell.value = value / 1_000_000
                 value_cell.number_format = '#,##0'
 
         current_row += 1
 
-    # Calculate and write growth rates in the rightmost column
-    growth_col = len(sorted_years) + 3  # One column after percentages
+    # Calculate and write growth rates (CAGR) in the rightmost column.
+    # The growth column is placed one column after the last year's column plus an extra spacer.
+    growth_col = len(sorted_years) + 3
     growth_header = ws.cell(row=3, column=growth_col, value="CAGR")
     growth_header.fill = label_fill
     growth_header.font = label_font
     growth_header.border = thin_border
     growth_header.alignment = center_alignment
 
+    # For each segment, calculate the compound annual growth rate (CAGR)
     for segment_idx, segment in enumerate(sorted_segments):
         row = segment_idx + 4
-        
-        # Get first and last valid values
-        first_val = next((segmentation_data[year].get(segment) for year in sorted_years if segmentation_data[year].get(segment) is not None), None)
-        last_val = next((segmentation_data[year].get(segment) for year in reversed(sorted_years) if segmentation_data[year].get(segment) is not None), None)
-        
-        if first_val and last_val and first_val != 0:
+
+        # Get the first valid value for the segment (from the earliest year)
+        first_val = None
+        for year in sorted_years:
+            breakdown = segmentation_data[year].get("breakdown", {})
+            val = breakdown.get(segment)
+            if val is not None:
+                first_val = val
+                break
+
+        # Get the last valid value for the segment (from the most recent year)
+        last_val = None
+        for year in reversed(sorted_years):
+            breakdown = segmentation_data[year].get("breakdown", {})
+            val = breakdown.get(segment)
+            if val is not None:
+                last_val = val
+                break
+
+        if first_val is not None and last_val is not None and first_val != 0:
             years_between = len(sorted_years) - 1
             if years_between > 0:
-                cagr = (last_val / first_val) ** (1/years_between) - 1
+                cagr = (last_val / first_val) ** (1 / years_between) - 1
                 growth_cell = ws.cell(row=row, column=growth_col, value=cagr)
                 growth_cell.number_format = '0.0%'
                 growth_cell.font = Font(name="Arial", size=8, italic=True)
-                growth_cell.fill = data_fill  # Added fill for consistency
-                growth_cell.border = thin_border  # Added border for consistency
-
+                growth_cell.fill = data_fill
+                growth_cell.border = thin_border
         else:
-            # Create empty growth cell with consistent styling
+            # Create an empty growth cell with consistent styling
             growth_cell = ws.cell(row=row, column=growth_col)
             growth_cell.fill = data_fill
             growth_cell.border = thin_border
 
-    # Adjust column widths
+    # Adjust column widths: set column A wider for segment names, and other columns to a fixed width.
     ws.column_dimensions['A'].width = 30  # Segment names
     for col in range(2, growth_col + 1):
         ws.column_dimensions[get_column_letter(col)].width = 12
@@ -1493,12 +1410,11 @@ if __name__ == "__main__":
     write_company_description(writer, final_output)
     write_analyses_sheet(writer, final_output)
     write_balance_sheet_sheet(writer, final_output)
-    #write_profit_desc_sheet(writer, final_output)
-    
-    #write_qualities_sheet(writer, final_output)
-    #write_industry_sheet(writer, final_output)
-    #write_segmentation_sheet(writer, final_output)
-    #generate_config_note(ticker, writer.book)
+    write_profit_desc_sheet(writer, final_output)
+    write_qualities_sheet(writer, final_output)
+    write_industry_sheet(writer, final_output)
+    write_segmentation_sheet(writer, final_output)
+    generate_config_note(ticker, writer.book)
 
     # Apply formatting: set font to Arial size 10 for non-formatted cells and remove gridlines
     format_workbook(writer)
