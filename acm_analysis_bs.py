@@ -1,4 +1,4 @@
-# analysis_project/open_ai_data_extractor.py
+# analysis_project/acm_analysis_bs.py
 #!/usr/bin/env python3
 import os
 import json
@@ -182,7 +182,6 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         cf = cf_by_year.get(year, {})
         
         filing_url = bs.get('link')
-        shares_outstanding = ic.get('weightedAverageShsOutDil')
         net_profit = ic.get('netIncome')
         revenues = ic.get('revenue')
         diluted_eps = ic.get('epsdiluted')
@@ -205,15 +204,34 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         pretax_income = ic.get('incomeBeforeTax')
         fmp_tax_rate = (provision_for_taxes / pretax_income) if (provision_for_taxes is not None and pretax_income and pretax_income != 0) else None
         
+        # Get yearly high and low prices once:
+        yearly_prices = get_yearly_high_low_yahoo(yahoo_symbol, year)
+        yearly_high = yearly_prices[0] if yearly_prices else None
+        yearly_low = yearly_prices[1] if yearly_prices else None
+        
+        # Compute historical pricing metrics if possible:
+        pe_low = (yearly_low / diluted_eps) if (yearly_low and diluted_eps and diluted_eps != 0) else None
+        pe_high = (yearly_high / diluted_eps) if (yearly_high and diluted_eps and diluted_eps != 0) else None
+        pb_low = (yearly_low / book_value_per_share) if (yearly_low and book_value_per_share and book_value_per_share != 0) else None
+        pb_high = (yearly_high / book_value_per_share) if (yearly_high and book_value_per_share and book_value_per_share != 0) else None
+        sales_per_share = (revenues / shares_outstanding) if (revenues and shares_outstanding and shares_outstanding != 0) else None
+        ps_low = (yearly_low / sales_per_share) if (yearly_low and sales_per_share and sales_per_share != 0) else None
+        ps_high = (yearly_high / sales_per_share) if (yearly_high and sales_per_share and sales_per_share != 0) else None
+        depreciation = cf.get('depreciationAndAmortization')
+        if depreciation is not None and net_profit is not None and shares_outstanding and shares_outstanding != 0:
+            addback_dep_earnings_ps = (net_profit + depreciation) / shares_outstanding
+        else:
+            addback_dep_earnings_ps = None
+        pcf_low = (yearly_low / addback_dep_earnings_ps) if (yearly_low and addback_dep_earnings_ps and addback_dep_earnings_ps != 0) else None
+        pcf_high = (yearly_high / addback_dep_earnings_ps) if (yearly_high and addback_dep_earnings_ps and addback_dep_earnings_ps != 0) else None
+
         company_description = {
             "net_profit": net_profit,
             "diluted_eps": diluted_eps,
             "operating_eps": operating_eps,
             "pe_ratio": pe_by_year.get(year),
-            "price_low": (get_yearly_high_low_yahoo(yahoo_symbol, year)[1]
-                          if get_yearly_high_low_yahoo(yahoo_symbol, year) else None),
-            "price_high": (get_yearly_high_low_yahoo(yahoo_symbol, year)[0]
-                           if get_yearly_high_low_yahoo(yahoo_symbol, year) else None),
+            "price_low": yearly_low,
+            "price_high": yearly_high,
             "dividends_paid": dividends_paid,
             "dividends_per_share": (dividends_paid / shares_outstanding
                                     if (dividends_paid and shares_outstanding and shares_outstanding != 0) else None),
@@ -224,6 +242,17 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
             "book_value_per_share": book_value_per_share
         }
         
+        hist_pricing = {
+            "pe_low": pe_low,
+            "pe_high": pe_high,
+            "pb_low": pb_low,
+            "pb_high": pb_high,
+            "ps_low": ps_low,
+            "ps_high": ps_high,
+            "pcf_low": pcf_low,
+            "pcf_high": pcf_high
+        }
+
         analyses = {
             "revenue": revenues,
             "tax_rate": fmp_tax_rate  # FMP tax rate computed above
@@ -236,7 +265,8 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         results[year] = {
             "company_description": company_description,
             "analyses": analyses,
-            "profit_description": profit_description
+            "profit_description": profit_description,
+            "hist_pricing": hist_pricing
             # FMP balance sheet data is ignored; we use SEC balance sheet.
         }
         prev_shares_outstanding = shares_outstanding
@@ -1102,7 +1132,28 @@ def create_unified_year_output(year, fmp_data, sec_data):
         "profit_description": profit_description,
         "segmentation": segmentation
     }
+    historical_pricing = fmp_data.get("hist_pricing", {})
+    unified["historical_pricing"] = historical_pricing
     return unified
+
+def compute_historical_pricing_averages(yoy_data: dict):
+    metrics = ['pe_low', 'pe_high', 'pb_low', 'pb_high', 'ps_low', 'ps_high', 'pcf_low', 'pcf_high']
+    sums = {metric: 0 for metric in metrics}
+    counts = {metric: 0 for metric in metrics}
+    
+    for year_data in yoy_data.values():
+        # Changed key from 'hist_pricing' to 'historical_pricing'
+        hist = year_data.get('historical_pricing', {})
+        for metric in metrics:
+            value = hist.get(metric)
+            if value is not None and isinstance(value, (int, float)):
+                sums[metric] += value
+                counts[metric] += 1
+    
+    averages = {}
+    for metric in metrics:
+        averages[f'avg_{metric}'] = (sums[metric] / counts[metric]) if counts[metric] > 0 else None
+    return averages
 
 def main():
     parser = argparse.ArgumentParser(description="Extract unified insurance metrics from FMP and SEC filings")
@@ -1215,7 +1266,7 @@ def main():
         
         # Compute the investment characteristics based on the unified year-by-year data.
         investment_characteristics = compute_investment_characteristics(unified_results)
-
+        historical_pricing_averages = compute_historical_pricing_averages(unified_results)
         # Now insert the new section into the "analyses" top-level key.
         # (You can choose whether to place it at the same level as "data" or merge it with per‑year analyses.)
         inverted_output["analyses"]["investment_characteristics"] = investment_characteristics
@@ -1275,6 +1326,7 @@ def main():
                 "data": inverted_output["profit_description"]["data"]
             },
             "segmentation": inverted_output["segmentation"],
+            "historical_pricing": historical_pricing_averages,  
             "industry_comparison": industry_data,
             "qualities": qualities
         }
