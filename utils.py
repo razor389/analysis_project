@@ -145,3 +145,30 @@ def get_current_quote_yahoo(symbol: str) -> float:
     except Exception as e:
         print(f"Error fetching current quote for {symbol}: {e}")
         return None
+    
+def get_long_term_rate():
+    """
+    Fetch the long-term rates from the backend API and return the 20-year bond yield.
+    
+    Expects the environment variable BACKEND_URL to be set.
+    
+    Returns:
+        float: The bond_yield_20y value, or None if an error occurs.
+    """
+    backend_url = os.getenv("BACKEND_URL")
+    if not backend_url:
+        print("Error: BACKEND_URL environment variable not set.")
+        return None
+
+    url = f"{backend_url}/api/v1/long_term_rates"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        # Assuming the API returns a structure like: {"rates": {"bond_yield_20y": 3.5, ...}}
+        rates = data.get("rates", {})
+        bond_yield_20y = rates.get("bond_yield_20y")
+        return (bond_yield_20y/100)
+    except Exception as e:
+        print("Error fetching long-term rates:", e)
+        return None

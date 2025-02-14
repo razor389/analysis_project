@@ -11,7 +11,7 @@ from datetime import datetime
 import textwrap
 import re
 
-from utils import get_current_quote_yahoo
+from utils import get_current_quote_yahoo, get_long_term_rate
 
 # Define Custom Fills
 label_fill = PatternFill(start_color="00FFFF", end_color="00FFFF", fill_type="solid")  # Light blue
@@ -1478,7 +1478,8 @@ def write_valuation_sheet(writer, final_output, ticker):
     apply_table_border(ws, 1, 3, 5)
 
     current_price = get_current_quote_yahoo(ticker)
-
+    tbond_rate = get_long_term_rate()
+    
     # Get forecast year column reference
     sorted_years = sorted(
         final_output["company_description"]["data"].keys(),
@@ -1581,7 +1582,7 @@ def write_valuation_sheet(writer, final_output, ticker):
             "metrics": {
                 # Same logic as top-left for 'Current EPS'
                 "Current EPS:": f"='Co. Desc'!{first_forecast_col}5 * B4 * B3",
-                "T-Bond Rate:": 0.04,
+                "T-Bond Rate:": tbond_rate,
                 # Was =H9/H10 in original; now =E9/E10
                 "Relative Value:": "=E9/E10",
             },
@@ -1652,7 +1653,7 @@ def write_valuation_sheet(writer, final_output, ticker):
                 
                 "10yr FV:": "=FV(H10,10,,-H9)",
                 
-                "Investment Return:": 0.048,
+                "Investment Return:": tbond_rate,
                 
                 "Return on Float:": "=(H13-H11)",
                 
