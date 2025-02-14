@@ -1461,6 +1461,312 @@ def write_hist_pricing_sheet(writer, final_output):
         ws.column_dimensions[get_column_letter(base_col)].width = 12      # Labels
         ws.column_dimensions[get_column_letter(base_col + 1)].width = 20  # Values
 
+def write_valuation_sheet(writer, final_output, ticker):
+    """Write the valuation analysis sheet with 2x2 grid layout"""
+    reported_currency = final_output["summary"]["reported_currency"]
+    wb = writer.book
+    
+    if "Valuation" not in wb.sheetnames:
+        wb.create_sheet("Valuation")
+    ws = wb["Valuation"]
+
+    # Title
+    title_cell = ws.cell(row=1, column=4, value="Valuation (USD)")
+    title_cell.fill = label_fill
+    title_cell.font = title_font
+    title_fill_range(ws, 1, 3, 5)
+    apply_table_border(ws, 1, 3, 5)
+
+    current_price = get_current_quote_yahoo(ticker)
+
+    # Get forecast year column reference
+    sorted_years = sorted(
+        final_output["company_description"]["data"].keys(),
+        key=lambda x: int(x)
+    )
+    first_forecast_col = (
+        get_column_letter(2 + len(sorted_years)) if sorted_years else "B"
+    )
+    last_col_bal_sht = (
+        get_column_letter(5 + len(sorted_years)) if sorted_years else "F"
+    )
+    # =========================================================================
+    # REARRANGED SETTINGS
+    # =========================================================================
+    #   B3 => ADR Multiple
+    #   B4 => Currency Ratio
+    #   D3 => EPS Growth
+    #   D4 => Dividend Growth
+    #   F3 => Purchase Discount
+    #   F4 => Sell Discount
+    #   F5 => PE Multiple
+    # =========================================================================
+    settings = {
+        (3, 2): ("ORD:ADR:", 1),                           # B3
+        (4, 2): (f"USD:{reported_currency} rate:", 1),          # B4
+        (3, 4): ("EPS growth rate:", 0.10),                     # D3
+        (4, 4): ("Dividend growth rate:", 0.10),                # D4
+        (3, 6): ("Purchase Discount:", 0.14),                   # F3
+        (4, 6): ("Sell Discount:", 0.05),                       # F4
+        (5, 6): ("PE Multiple:", 25),                           # F5
+    }
+
+    for (row, col), (label, value) in settings.items():
+        label_cell = ws.cell(row=row, column=col - 1, value=label)
+        label_cell.fill = label_fill
+        label_cell.font = label_font
+        label_cell.border = thin_border
+        
+        value_cell = ws.cell(row=row, column=col, value=value)
+        value_cell.fill = data_fill
+        value_cell.font = data_arial_font
+        value_cell.border = thin_border
+        value_cell.alignment = center_alignment
+
+        # Format anything < 1 as percentage
+        if isinstance(value, float) and value < 1:
+            value_cell.number_format = '0.00%'
+    
+    new_settings = {
+        (3, 7): ("Buy %:", 0.60),    # G3 (label), H3 (value = 60%)
+        (4, 7): ("Sell %:", 1.20),   # G4 (label), H4 (value = 120%)
+    }
+
+    for (row, col), (label, value) in new_settings.items():
+        label_cell = ws.cell(row=row, column=col, value=label)
+        label_cell.fill = label_fill
+        label_cell.font = label_font
+        label_cell.border = thin_border
+        
+        value_cell = ws.cell(row=row, column=col + 1, value=value)
+        value_cell.fill = data_fill
+        value_cell.font = data_arial_font
+        value_cell.border = thin_border
+        value_cell.alignment = center_alignment
+
+        # Format them as percentages
+        value_cell.number_format = '0.00%'
+
+    # If you need the numeric value of PE multiple in code:
+    # pe_multiple_val = ws.cell(row=5, column=6).value  # F5
+
+    # =========================================================================
+    # 2x2 GRID LAYOUT
+    # =========================================================================
+    # We keep top-left and bottom-left in columns B/C.
+    # We move top-right and bottom-right to columns E/F.
+    # Then fix all formula references accordingly.
+    # =========================================================================
+    grid_segments = {
+        # ---------------------------------------------------------------------
+        # TOP LEFT (columns B/C)
+        # ---------------------------------------------------------------------
+        "Initial Rate of Investment:": {
+            "start_row": 8,
+            "start_col": 2,  # B
+            "metrics": {
+                "Current Price:": f"={current_price}",
+                # Currency ratio is B4, ADR multiple is B3:
+                "Current EPS:": f"='Co. Desc'!{first_forecast_col}5 * B4 * B3",
+                # = B10 / B9 once written to the sheet
+                "Initial ROI:": "=B10/B9",
+            },
+        },
+        # ---------------------------------------------------------------------
+        # TOP RIGHT (columns E/F)
+        # ---------------------------------------------------------------------
+        "Relative Value to Investment In T-Bonds:": {
+            "start_row": 8,
+            "start_col": 5,  # E
+            "metrics": {
+                # Same logic as top-left for 'Current EPS'
+                "Current EPS:": f"='Co. Desc'!{first_forecast_col}5 * B4 * B3",
+                "T-Bond Rate:": 0.04,
+                # Was =H9/H10 in original; now =E9/E10
+                "Relative Value:": "=E9/E10",
+            },
+        },
+        # ---------------------------------------------------------------------
+        # BOTTOM LEFT (columns B/C)
+        # ---------------------------------------------------------------------
+        "Valuation as an Equity Bond:": {
+            "start_row": 15,
+            "start_col": 2,  # B
+            "metrics": {
+                # Use B3 (ADR multiple) and B4 (currency ratio)
+                "Current BV:": f"='Co. Desc'!{first_forecast_col}20 * B3 * B4",
+                "Current ROE:": f"='Co. Desc'!{first_forecast_col}24",
+                "Retained % adjustment:": 0.10,
+                # unchanged, presumably references other sheet cells
+                "Retained %:": "=1 - 'Analyses'!J5 - 'Analyses'!J7 - B18",
+                "Net BV growth:": "=B17*B19",
+                "BV in year 10:": "=FV(B20, 10, , -B16)",
+                "EPS Adjustment Factor:": 1.5,
+                "EPS in Year 10:": "=B17 * B21 * B22",
+                # PE multiple is at F5
+                "Value at PE Multiple:": "=F5 * B23",
+                # Dividend growth is at D4 ⇒ use FV(D4,10,…)
+                "Total Dividends:": (
+                    f"=(('Co. Desc'!{first_forecast_col}13 + "
+                    f"FV(D4, 10, , -'Co. Desc'!{first_forecast_col}13))/2)*10*B3*B4"
+                ),
+                "Total Future Value:": "=B24+B25",
+                # Purchase discount is at F3
+                "Purchase at Discount:": "=PV(F3, 10, , B26)*-1",
+            },
+        },
+        # ---------------------------------------------------------------------
+        # BOTTOM RIGHT (columns E/F)
+        # ---------------------------------------------------------------------
+        "Valuation on Earnings Growth:": {
+            "start_row": 15,
+            "start_col": 5,  # E
+            "metrics": {
+                # Same B3/B4 for ADR/currency
+                "Current EPS:": f"='Co. Desc'!{first_forecast_col}5 * B4 * B3",
+                # EPS Growth is at D3 => FV(D3,10,…)
+                "EPS in year 10:": "=FV(D3, 10, , -E16)",
+                "Avg PE Ratio:": f"=AVERAGE('Co. Desc'!B8:{first_forecast_col}8)",
+                # Was =B5*H17 + B25; now =F5*E17 + B25
+                "Value at PE Multiple:": "=F5*E17 + B25",
+                # Was =RATE(10, , B9, -H19 + B25); now =RATE(10, , B9, -E19 + B25)
+                "Price Return:": "=RATE(10, , B9, -E19 + B25)",
+                "Dividend Return:": f"='Co. Desc'!{first_forecast_col}14",
+                # Was =H20+H21; now =E20+E21
+                "Total Return:": "=E20 + E21",
+                # Purchase discount is F3
+                "Purchase at Discount:": "=PV(F3, 10, , -E19)",
+                # Sell discount is F4
+                "Sell at Discount:": "=PV(F4, 10, , -E19)",
+            },
+        },
+        "Float Valuation Approach:": {
+            "start_row": 8,
+            "start_col": 8,  # G
+            "metrics": {
+                "Float:": f"=('Balance Sht.'!{last_col_bal_sht}24 + 'Balance Sht.'!{last_col_bal_sht}23 -'Balance Sht.'!{last_col_bal_sht}13 -'Balance Sht.'!{last_col_bal_sht}11)*B4",
+                
+                "Float Growth Rate:": 0.05,
+                
+                "Cost of Float:": -0.04,
+                
+                "10yr FV:": "=FV(H10,10,,-H9)",
+                
+                "Investment Return:": 0.048,
+                
+                "Return on Float:": "=(H13-H11)",
+                
+                "Tax Burden on Float:": f"='Analyses'!{first_forecast_col}25 * H14",
+
+                "After Tax Return on Float:": "=(H14-H15)",
+
+                "Income on Float:": "=(H12 * H16)",
+
+                "Discount Rate:": 0.08,
+
+                "Capitalization Factor:": "=(H18-H10)",
+
+                "Value of Float EOY10:": "=(H17/H19)",
+
+                "RFR:": 0.06,
+
+                "PV at RFR:": "=PV(H21,10,,-H20)",
+
+                "Value of Insurance Equity:": f"='Co. Desc'!{first_forecast_col}19 * B4",
+
+                "Total Value:": "=(H22+H23)",
+
+                "Shares Outstanding:": f"='Co. Desc'!{first_forecast_col}16 * (1/B3)",
+                
+                # Share Value = Total Value / Shares Outstanding
+                "Per Share Value:": "=(H24 / H25)",
+                
+                # Buy at => Share Value * Buy % (which is in H1)
+                "Buy At:": "=H26 * $H$3",
+                
+                # Sell at => Share Value * Sell % (which is in H2)
+                "Sell At:": "=H26 * $H$4",
+            },
+        }
+    }
+
+    #
+    # Write each 2×2 grid segment
+    #
+    for title, config in grid_segments.items():
+        start_row = config["start_row"]
+        start_col = config["start_col"]
+        
+        # Segment title
+        title_cell = ws.cell(row=start_row, column=start_col - 1, value=title)
+        title_cell.fill = label_fill
+        title_cell.font = Font(name="Times New Roman", size=12, bold=True, italic=True)
+        title_cell.border = thin_border
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+        # Merge the two columns for the label
+        ws.merge_cells(
+            start_row=start_row, start_column=start_col - 1, 
+            end_row=start_row, end_column=start_col
+        )
+        
+        # Write metrics
+        current_row = start_row + 1
+        for label, formula in config["metrics"].items():
+            # Label
+            label_cell = ws.cell(row=current_row, column=start_col - 1, value=label)
+            label_cell.fill = label_fill
+            label_cell.font = label_font
+            label_cell.border = thin_border
+            
+            # Value/Formula
+            value_cell = ws.cell(row=current_row, column=start_col, value=formula)
+            value_cell.fill = data_fill
+            value_cell.font = data_arial_font
+            value_cell.border = thin_border
+            value_cell.alignment = center_alignment
+
+            # Make certain items bold
+            if label.lower() in ["relative value:", "purchase at discount:", "sell at discount:", "buy at:", "sell at:"]:
+                value_cell.font = data_arial_bold_font
+            
+            # Format numeric cells
+            label_lower = label.lower()
+            if label_lower == "t-bond rate:":
+                value_cell.number_format = '0.00%'
+            elif label_lower == "eps adjustment factor:":
+                value_cell.number_format = '0.00'
+            elif label_lower == "avg pe ratio:":
+                value_cell.number_format = '0.00'
+            elif label_lower == "rfr:":
+                value_cell.number_format = '0.00%'
+            elif label_lower == "float:":
+                value_cell.number_format = '"$"#,##0.00'
+            elif "net bv growth" in label_lower:
+                value_cell.number_format = '0.00%'
+            elif "shares outstanding" in label_lower:
+                value_cell.number_format = '#,##0'
+            elif any(x in label_lower for x in ["rate", "tax", "factor", "roi", "return", "roe", "%", "cost"]):
+                value_cell.number_format = '0.00%'
+            elif any(x in label_lower for x in ["price", "value", "eps", "bv", "dividends", "purchase", "sell",
+                                                "ebit", "value", "income", "debt", "share", "pv", "fv", "buy at", "sell at"]):
+                value_cell.number_format = '"$"#,##0.00'
+            
+            current_row += 1
+
+    # =========================================================================
+    # Column Widths
+    # =========================================================================
+    # Example adjustments for label columns vs. value columns
+    ws.column_dimensions[get_column_letter(1)].width = 25  # A
+    ws.column_dimensions[get_column_letter(2)].width = 15  # B
+    ws.column_dimensions[get_column_letter(3)].width = 25  # C
+    ws.column_dimensions[get_column_letter(4)].width = 20  # D
+    ws.column_dimensions[get_column_letter(5)].width = 25  # E
+    ws.column_dimensions[get_column_letter(6)].width = 15  # F
+    ws.column_dimensions[get_column_letter(7)].width = 25  # G
+    ws.column_dimensions[get_column_letter(8)].width = 15  # H
+
+
 def generate_config_note(ticker, wb):
     """
     Add a note in cell B1 of the profit_desc sheet if there are any
@@ -1548,6 +1854,7 @@ def generate_excel_for_ticker_year(ticker: str, year: int):
     write_industry_sheet(writer, final_output)
     write_segmentation_sheet(writer, final_output)
     write_hist_pricing_sheet(writer, final_output)
+    write_valuation_sheet(writer, final_output, ticker)
     generate_config_note(ticker, writer.book)
 
     # 4. Apply workbook formatting (remove gridlines, etc.)
@@ -1582,6 +1889,7 @@ if __name__ == "__main__":
     write_industry_sheet(writer, final_output)
     write_segmentation_sheet(writer, final_output)
     write_hist_pricing_sheet(writer, final_output)
+    write_valuation_sheet(writer, final_output, ticker)
     generate_config_note(ticker, writer.book)
 
     # Apply formatting: set font to Arial size 10 for non-formatted cells and remove gridlines
