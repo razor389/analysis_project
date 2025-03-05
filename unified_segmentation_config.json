@@ -114,6 +114,133 @@
             }
         }
     },
+    "DE": {
+        "revenue": {
+            "multi_tag": true,
+            "sources": [
+                {
+                    "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+                    "axes": ["Statement Business Segments Axis", "Product Or Service Axis", "Consolidation Items Axis"],
+                    "name_mapping": {
+                        "us-gaap:OperatingSegmentsMember\nus-gaap:ProductMember\nde:ProductionAndPrecisionAgricultureSegmentMember": "Production and Precision Agriculture",
+                        "us-gaap:OperatingSegmentsMember\nus-gaap:ProductMember\nde:SmallAgricultureAndTurfSegmentMember": "Small Agriculture and Turf",
+                        "us-gaap:OperatingSegmentsMember\nus-gaap:ProductMember\nde:ConstructionAndForestrySegmentMember": "Construction and Forestry"
+                    },
+                    "year_range": [2023, 2024]
+                },
+                {
+                    "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+                    "axes": ["Statement Business Segments Axis", "Product Or Service Axis"],
+                    "name_mapping": {
+                        "us-gaap:ProductMember\nde:ProductionAndPrecisionAgricultureSegmentMember": "Production and Precision Agriculture",
+                        "us-gaap:ProductMember\nde:SmallAgricultureAndTurfSegmentMember": "Small Agriculture and Turf",
+                        "us-gaap:ProductMember\nde:ConstructionAndForestrySegmentMember": "Construction and Forestry"
+                    },
+                    "year_range": [2021, 2022]
+                },
+                {
+                    "tag": "us-gaap:Revenues",
+                    "axes": ["Statement Business Segments Axis", "Product Or Service Axis"],
+                    "name_mapping": {
+                        "us-gaap:ProductMember\nde:AgricultureAndTurfSegmentMember": "Production and Precision Agriculture",
+                        "us-gaap:ProductMember\nde:ConstructionAndForestrySegmentMember": "Construction and Forestry"
+                    },
+                    "year_range": [2010, 2020]
+                },
+                {
+                    "tag": "us-gaap:RevenueNotFromContractWithCustomer",
+                    "axes": ["Consolidation Items Axis", "Statement Business Segments Axis"],
+                    "name_mapping": {
+                        "us-gaap:OperatingSegmentsMember\nde:FinancialServicesSegmentMember": "Financial Services"
+                    },
+                    "year_range": [2023, 2024]
+                },
+                {
+                    "tag": "us-gaap:RevenueNotFromContractWithCustomer",
+                    "axes": ["Statement Business Segments Axis"],
+                    "name_mapping": {
+                        "de:FinancialServicesSegmentMember": "Financial Services"
+                    },
+                    "year_range": [2021, 2022]
+                },
+                {
+                    "tag": "us-gaap:Revenues",
+                    "axes": ["Statement Business Segments Axis"],
+                    "name_mapping": {
+                        "de:FinancialServicesSegmentMember": "Financial Services"
+                    },
+                    "year_range": [2010, 2020]
+                },
+                {
+                    "tag": "de:RevenuesOther",
+                    "axes": ["Consolidation Items Axis"],
+                    "name_mapping": {
+                        "us-gaap:MaterialReconcilingItemsMember": "Other"
+                    },
+                    "year_range": [2021, 2024]
+                },
+                {
+                    "tag": "us-gaap:Revenues",
+                    "axes": ["Consolidation Items Axis"],
+                    "name_mapping": {
+                        "us-gaap:MaterialReconcilingItemsMember": "Other"
+                    },
+                    "year_range": [2010, 2020]
+                }
+
+            ]
+        },
+        "operating_income": {
+            "multi_tag": true,
+            "sources": [
+                {
+                    "tag": "us-gaap:OperatingIncomeLoss",
+                    "axes": ["Statement Business Segments Axis", "Consolidation Items Axis"],
+                    "name_mapping": {
+                        "us-gaap:OperatingSegmentsMember\nde:ProductionAndPrecisionAgricultureSegmentMember": "Production and Precision Agriculture",
+                        "us-gaap:OperatingSegmentsMember\nde:SmallAgricultureAndTurfSegmentMember": "Small Agriculture and Turf",
+                        "us-gaap:OperatingSegmentsMember\nde:ConstructionAndForestrySegmentMember": "Construction and Forestry"
+                    },
+                    "year_range": [2023, 2024]
+                },
+                {
+                    "tag": "us-gaap:OperatingIncomeLoss",
+                    "axes": ["Statement Business Segments Axis"],
+                    "name_mapping": {
+                        "de:ProductionAndPrecisionAgricultureSegmentMember": "Production and Precision Agriculture",
+                        "de:SmallAgricultureAndTurfSegmentMember": "Small Agriculture and Turf",
+                        "de:ConstructionAndForestrySegmentMember": "Construction and Forestry"
+                    },
+                    "year_range": [2021, 2022]
+                },
+                {
+                    "tag": "us-gaap:OperatingIncomeLoss",
+                    "axes": ["Statement Business Segments Axis"],
+                    "name_mapping": {
+                        "de:AgricultureAndTurfSegmentMember": "Production and Precision Agriculture",
+                        "de:ConstructionAndForestrySegmentMember": "Construction and Forestry"
+                    },
+                    "year_range": [2010, 2020]
+                },
+                {
+                    "tag": "us-gaap:OperatingIncomeLoss",
+                    "axes": ["Consolidation Items Axis", "Statement Business Segments Axis"],
+                    "name_mapping": {
+                        "us-gaap:OperatingSegmentsMember\nde:FinancialServicesSegmentMember": "Financial Services"
+                    },
+                    "year_range": [2023, 2024]
+                },
+                {
+                    "tag": "us-gaap:OperatingIncomeLoss",
+                    "axes": ["Statement Business Segments Axis"],
+                    "name_mapping": {
+                        "de:FinancialServicesSegmentMember": "Financial Services"
+                    },
+                    "year_range": [2010, 2022]
+                }
+            ]
+        }
+    },
     "MSFT": {
         "revenue": {
             "tag": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",

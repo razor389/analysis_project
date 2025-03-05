@@ -388,40 +388,110 @@ def deduplicate_metrics(facts):
     return deduplicated
 
 def process_raw_segmentation(ticker: str, year: int, metric_config: Dict, debug: bool = False) -> List[Dict]:
-    """Extract segment data for a specific metric."""
-    tag = metric_config.get('tag')
-    if not tag:
-        return []
+    """Extract segment data for a specific metric, supporting multiple tags with year ranges."""
+    # Check if this is a multi-tag configuration
+    if metric_config.get('multi_tag'):
+        all_facts = []
+        sources = metric_config.get('sources', [])
+        
+        for source in sources:
+            # Check if this source applies to the current year
+            year_range = source.get('year_range', [0, 9999])
+            if year < year_range[0] or year > year_range[1]:
+                continue
+                
+            tag = source.get('tag')
+            if not tag:
+                continue
+                
+            logger.info(f"Processing tag: {tag} for year {year}")
+            filing_url = get_filing_url(ticker, year)
+            if not filing_url:
+                raise ValueError(f"Could not get filing URL for {ticker} {year}")
+            
+            logger.info(f"Filing URL: {filing_url}")
+            facts = extract_inline_xbrl_data(filing_url, tag)
+            
+            logger.info(f"Extracted {len(facts)} facts for tag {tag}")
+            if facts and debug:
+                logger.debug("Sample fact structure:")
+                logger.debug(json.dumps(facts[0], indent=2))
+            
+            axes = source.get('axes')
+            filtered_facts = filter_facts(facts, axes, year, debug)
+            all_facts.extend(filtered_facts)
+        
+        return all_facts
+    else:
+        # Original single-tag implementation
+        tag = metric_config.get('tag')
+        if not tag:
+            return []
+        
+        logger.info(f"Processing tag: {tag}")
+        filing_url = get_filing_url(ticker, year)
+        if not filing_url:
+            raise ValueError(f"Could not get filing URL for {ticker} {year}")
+        
+        logger.info(f"Filing URL: {filing_url}")
+        facts = extract_inline_xbrl_data(filing_url, tag)
+        
+        logger.info(f"Extracted {len(facts)} facts for tag {tag}")
+        if facts and debug:
+            logger.debug("Sample fact structure:")
+            logger.debug(json.dumps(facts[0], indent=2))
+        
+        axes = metric_config.get('axes')
+        return filter_facts(facts, axes, year, debug)
     
-    logger.info(f"Processing tag: {tag}")
-    filing_url = get_filing_url(ticker, year)
-    if not filing_url:
-        raise ValueError(f"Could not get filing URL for {ticker} {year}")
-    
-    logger.info(f"Filing URL: {filing_url}")
-    facts = extract_inline_xbrl_data(filing_url, tag)
-    
-    logger.info(f"Extracted {len(facts)} facts for tag {tag}")
-    if facts and debug:
-        logger.debug("Sample fact structure:")
-        logger.debug(json.dumps(facts[0], indent=2))
-    
-    axes = metric_config.get('axes')
-    return filter_facts(facts, axes, year, debug)
-
-def transform_facts(raw_facts: List[Dict], name_mapping: Dict[str, str]) -> Dict[str, int]:
-    """Transform raw facts into structured data using name mappings."""
+def transform_facts(raw_facts: List[Dict], metric_config: Dict, year: int) -> Dict[str, int]:
+    """Transform raw facts into structured data using name mappings, handling year-specific configurations."""
     transformed = {}
     
-    for fact in raw_facts:
-        entry_member_parts = set(fact["explicit_member"].split("\n"))
-        for config_member, mapped_name in name_mapping.items():
-            config_member_parts = set(config_member.split("\n"))
-            if entry_member_parts == config_member_parts:
-                # Convert fact value to float, removing commas
-                value = int(fact["fact"].replace(",", ""))
-                transformed[mapped_name] = value
-                break
+    # Determine the name mapping based on whether it's a multi-tag config
+    if metric_config.get('multi_tag'):
+        # For each fact, try to find a match in any of the applicable sources
+        for fact in raw_facts:
+            entry_member_parts = set(fact.get("explicit_member", "").split("\n"))
+            matched = False
+            
+            for source in metric_config.get('sources', []):
+                # Check if this source applies to the current year
+                year_range = source.get('year_range', [0, 9999])
+                if year < year_range[0] or year > year_range[1]:
+                    continue
+                    
+                name_mapping = source.get('name_mapping', {})
+                
+                for config_member, mapped_name in name_mapping.items():
+                    config_member_parts = set(config_member.split("\n"))
+                    if entry_member_parts == config_member_parts:
+                        # Convert fact value to integer, removing commas
+                        try:
+                            value = int(fact["fact"].replace(",", ""))
+                            transformed[mapped_name] = value
+                            matched = True
+                            break
+                        except (ValueError, KeyError):
+                            logger.warning(f"Could not convert fact value to integer: {fact.get('fact')}")
+                
+                if matched:
+                    break
+    else:
+        # Original implementation for single-tag configs
+        name_mapping = metric_config.get('name_mapping', {})
+        for fact in raw_facts:
+            entry_member_parts = set(fact.get("explicit_member", "").split("\n"))
+            for config_member, mapped_name in name_mapping.items():
+                config_member_parts = set(config_member.split("\n"))
+                if entry_member_parts == config_member_parts:
+                    # Convert fact value to integer, removing commas
+                    try:
+                        value = int(fact["fact"].replace(",", ""))
+                        transformed[mapped_name] = value
+                    except (ValueError, KeyError):
+                        logger.warning(f"Could not convert fact value to integer: {fact.get('fact')}")
+                    break
     
     return transformed
 
@@ -450,7 +520,7 @@ def handle_manual_segmentation(config: dict) -> dict:
     return result
 
 def process_years(ticker: str, end_year: int, raw_output: bool = False, debug: bool = False) -> Dict:
-    """Process multiple years of data with support for raw and transformed output."""
+    """Process multiple years of data with support for year-specific configurations."""
     config = load_config(ticker)
     
     # Check if this ticker has manual data
@@ -480,7 +550,8 @@ def process_years(ticker: str, end_year: int, raw_output: bool = False, debug: b
                     if raw_output:
                         year_metrics[metric_name] = raw_facts
                     else:
-                        transformed_data = transform_facts(raw_facts, metric_config.get('name_mapping', {}))
+                        # Pass the entire metric_config and current year
+                        transformed_data = transform_facts(raw_facts, metric_config, current_year)
                         year_metrics[metric_name] = transformed_data
             
             if metrics_found:
@@ -510,16 +581,42 @@ def process_years(ticker: str, end_year: int, raw_output: bool = False, debug: b
                         metrics_found = False
                         
                         for metric_name, metric_config in config.items():
-                            facts = extract_inline_xbrl_data(last_successful_filing_url, metric_config['tag'])
-                            filtered_facts = filter_facts(facts, metric_config.get('axes'), search_year, debug)
-                            
-                            if filtered_facts:
-                                metrics_found = True
-                                if raw_output:
-                                    year_metrics[metric_name] = filtered_facts
-                                else:
-                                    transformed_data = transform_facts(filtered_facts, metric_config.get('name_mapping', {}))
-                                    year_metrics[metric_name] = transformed_data
+                            if metric_config.get('multi_tag'):
+                                # Handle multi-tag configurations
+                                all_facts = []
+                                for source in metric_config.get('sources', []):
+                                    # Check if this source applies to the search year
+                                    year_range = source.get('year_range', [0, 9999])
+                                    if search_year < year_range[0] or search_year > year_range[1]:
+                                        continue
+                                        
+                                    tag = source.get('tag')
+                                    if tag:
+                                        facts = extract_inline_xbrl_data(last_successful_filing_url, tag)
+                                        filtered_facts = filter_facts(facts, source.get('axes'), search_year, debug)
+                                        all_facts.extend(filtered_facts)
+                                
+                                if all_facts:
+                                    metrics_found = True
+                                    if raw_output:
+                                        year_metrics[metric_name] = all_facts
+                                    else:
+                                        transformed_data = transform_facts(all_facts, metric_config, search_year)
+                                        year_metrics[metric_name] = transformed_data
+                            else:
+                                # Handle single-tag configurations
+                                tag = metric_config.get('tag')
+                                if tag:
+                                    facts = extract_inline_xbrl_data(last_successful_filing_url, tag)
+                                    filtered_facts = filter_facts(facts, metric_config.get('axes'), search_year, debug)
+                                    
+                                    if filtered_facts:
+                                        metrics_found = True
+                                        if raw_output:
+                                            year_metrics[metric_name] = filtered_facts
+                                        else:
+                                            transformed_data = transform_facts(filtered_facts, metric_config, search_year)
+                                            year_metrics[metric_name] = transformed_data
                         
                         if metrics_found:
                             # Copy revenue data to segmentation if segmentation is empty
