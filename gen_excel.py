@@ -569,6 +569,7 @@ def write_analyses_sheet(writer, final_output):
 def write_profit_desc_sheet(writer, final_output):
     """
     Write the profit description sheet with updated handling for operating earnings breakdowns
+    and Non-GAAP Earnings calculation from Operating EPS
     
     Parameters:
     writer: ExcelWriter object
@@ -608,7 +609,8 @@ def write_profit_desc_sheet(writer, final_output):
         "dividend_paid",
         "dividend_paid_pct_fcf",
         "share_buybacks_from_stmt_cf",
-        "net_biz_acquisition"
+        "net_biz_acquisition",
+        "non_gaap_earnings"  # Added the new metric
     ]
 
     # Define metric labels mapping
@@ -626,7 +628,8 @@ def write_profit_desc_sheet(writer, final_output):
         "amortization_depreciation": "Amortization & Depreciation:",
         "capex": "Capital Expenditures:",
         "earnings": "Earnings:",
-        "earnings_percent_revenue": "Earnings % of Revenue:"
+        "earnings_percent_revenue": "Earnings % of Revenue:",
+        "non_gaap_earnings": "Non-GAAP Earnings:"  # Added the new label
     }
 
     percent_metrics = ["dividend_paid_pct_fcf", "earnings_percent_revenue"]
@@ -730,9 +733,26 @@ def write_profit_desc_sheet(writer, final_output):
         year_data = pdata[year]
         
         for metric in metrics_order:
-            metric_val = year_data.get(metric)
             metric_row = metric_rows.get(metric)
-
+            
+            # Handle non_gaap_earnings - create formula referencing Co. Desc
+            if metric == "non_gaap_earnings":
+                # Find matching column in Co. Desc sheet (year columns start at B)
+                co_desc_col = 2 + i  # Add years index to column B (2)
+                co_desc_col_letter = get_column_letter(co_desc_col)
+                
+                # Formula: Operating EPS (row 6) * Shares Outstanding (row 16)
+                formula = f"='Co. Desc'!{co_desc_col_letter}6*'Co. Desc'!{co_desc_col_letter}16"
+                
+                # Create and format the formula cell
+                cell = ws.cell(row=metric_row, column=year_col, value=formula)
+                cell.fill = data_fill
+                cell.font = Font(name="Arial", italic=True)
+                cell.border = thin_border
+                cell.number_format = '#,##0'
+                continue
+                
+            metric_val = year_data.get(metric)
             if metric_val is None:
                 continue
 
@@ -905,6 +925,17 @@ def write_profit_desc_sheet(writer, final_output):
                     percent = (metric_val / rev_val) * 100
                     percent_cell = ws.cell(row=tm_row, column=year_col + 1, value=f"{percent:.1f}%")
                     percent_cell.font = Font(name="Arial", italic=True, size=8)
+                    
+        # Calculate percentages for non-GAAP earnings (which is now a formula)
+        non_gaap_row = metric_rows.get("non_gaap_earnings")
+        if non_gaap_row:
+            # The percentage formula needs to reference the cell with the formula
+            non_gaap_cell = ws.cell(row=non_gaap_row, column=year_col)
+            percent_formula = f"={non_gaap_cell.coordinate}/{ws.cell(row=revenues_row, column=year_col).coordinate}"
+            percent_cell = ws.cell(row=non_gaap_row, column=year_col + 1, value=percent_formula)
+            percent_cell.font = Font(name="Arial", italic=True, size=8)
+            percent_cell.number_format = '0.0%'
+            percent_cell.alignment = Alignment(horizontal="left", vertical="center")
 
 def write_balance_sheet_sheet(writer, final_output):
     reported_currency = final_output["summary"]["reported_currency"]

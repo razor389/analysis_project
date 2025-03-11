@@ -294,7 +294,7 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         shares_outstanding = ic.get('weightedAverageShsOutDil')
         net_profit = ic.get('netIncome')
         revenues = ic.get('revenue')
-        diluted_eps = ic.get('epsdiluted')
+        
         ebit = ic.get('operatingIncome')
         dividends_paid = -1 * cf.get('dividendsPaid', 0)
         shareholder_equity = bs.get('totalStockholdersEquity')
@@ -315,8 +315,8 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         operating_margin = (ebit / revenues) if (ebit and revenues) else None
 
         # Operating EPS = Net Profit / Shares Outstanding
-        operating_eps = (net_profit / shares_outstanding) if (net_profit and shares_outstanding) else None
-
+        operating_eps = None
+        diluted_eps = (net_profit / shares_outstanding) if (net_profit and shares_outstanding) else None
         # Operating earnings = revenues - expenses
         operating_earnings = ebit
 
