@@ -605,12 +605,11 @@ def write_profit_desc_sheet(writer, final_output):
         "operating_earnings",
         "external_costs",
         "earnings",
-        "earnings_percent_revenue",
+        "non_gaap_earnings",  # Moved up to replace earnings_percent_revenue
         "dividend_paid",
         "dividend_paid_pct_fcf",
         "share_buybacks_from_stmt_cf",
-        "net_biz_acquisition",
-        "non_gaap_earnings"  # Added the new metric
+        "net_biz_acquisition"
     ]
 
     # Define metric labels mapping
@@ -629,10 +628,10 @@ def write_profit_desc_sheet(writer, final_output):
         "capex": "Capital Expenditures:",
         "earnings": "Earnings:",
         "earnings_percent_revenue": "Earnings % of Revenue:",
-        "non_gaap_earnings": "Non-GAAP Earnings:"  # Added the new label
+        "non_gaap_earnings": "Non-GAAP Earnings:"  # Label remains the same
     }
 
-    percent_metrics = ["dividend_paid_pct_fcf", "earnings_percent_revenue"]
+    percent_metrics = ["dividend_paid_pct_fcf"]  # Removed earnings_percent_revenue since it's no longer used
 
     current_row = 5  # Starting row for metrics
     metric_rows = {}  # To track the row number for each metric
@@ -864,7 +863,7 @@ def write_profit_desc_sheet(writer, final_output):
     # Step 6: Compute and Write Percentages
     revenues_row = metric_rows.get("revenues")
     expense_breakdowns = ["cost_of_revenue", "research_and_development", "selling_marketing_general_admin"]
-    top_metrics = ["ebitda", "operating_earnings", "earnings"]  # Metrics that get percentage calculations
+    top_metrics = ["ebitda", "operating_earnings", "earnings", "non_gaap_earnings"]  # Added non_gaap_earnings to the list
 
     for i, year in enumerate(sorted_years):
         year_col = start_col_for_years + i * 2
@@ -921,21 +920,18 @@ def write_profit_desc_sheet(writer, final_output):
             if tm in metric_rows:
                 tm_row = metric_rows[tm]
                 metric_val = ws.cell(row=tm_row, column=year_col).value
-                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
+                
+                # For non_gaap_earnings, use the formula reference
+                if tm == "non_gaap_earnings":
+                    # The percentage formula needs to reference the cell with the formula
+                    percent_formula = f"={ws.cell(row=tm_row, column=year_col).coordinate}/{ws.cell(row=revenues_row, column=year_col).coordinate}"
+                    percent_cell = ws.cell(row=tm_row, column=year_col + 1, value=percent_formula)
+                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+                    percent_cell.number_format = '0.0%'
+                elif isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
                     percent = (metric_val / rev_val) * 100
                     percent_cell = ws.cell(row=tm_row, column=year_col + 1, value=f"{percent:.1f}%")
                     percent_cell.font = Font(name="Arial", italic=True, size=8)
-                    
-        # Calculate percentages for non-GAAP earnings (which is now a formula)
-        non_gaap_row = metric_rows.get("non_gaap_earnings")
-        if non_gaap_row:
-            # The percentage formula needs to reference the cell with the formula
-            non_gaap_cell = ws.cell(row=non_gaap_row, column=year_col)
-            percent_formula = f"={non_gaap_cell.coordinate}/{ws.cell(row=revenues_row, column=year_col).coordinate}"
-            percent_cell = ws.cell(row=non_gaap_row, column=year_col + 1, value=percent_formula)
-            percent_cell.font = Font(name="Arial", italic=True, size=8)
-            percent_cell.number_format = '0.0%'
-            percent_cell.alignment = Alignment(horizontal="left", vertical="center")
 
 def write_balance_sheet_sheet(writer, final_output):
     reported_currency = final_output["summary"]["reported_currency"]
