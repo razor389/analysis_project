@@ -1319,10 +1319,30 @@ def write_studies_sheet(writer, final_output):
     data_cell.font = data_arial_font
 
     ws.cell(row=40, column=3, value="Net Income:").font = label_font
-    val = anip.get("net_income")
-    if val is not None:
-        val = val / 1_000_000
-    data_cell = ws.cell(row=40, column=4, value=val)
+    # Get the historical years (exclude future forecast years)
+    cd_data = final_output["company_description"]["data"]
+    sorted_years = sorted(cd_data.keys(), key=lambda x: int(x))
+    
+    # Determine which years are historical vs forecast
+    # In Co. Desc., years start at column B (2)
+    start_col = 2  # Column B
+    if sorted_years:
+        # Get the last historical year
+        # We want the last year with actual data, not forecast years
+        last_year = sorted_years[-1]
+        last_year_col = start_col + sorted_years.index(last_year)
+        
+        # Create a formula that multiplies operating EPS (row 6) by shares outstanding (row 16)
+        # for the last historical year to get the net income
+        formula = f"='Co. Desc'!{get_column_letter(last_year_col)}6*'Co. Desc'!{get_column_letter(last_year_col)}16"
+        data_cell = ws.cell(row=40, column=4, value=formula)
+    else:
+        # Fallback to original code if no years found
+        val = anip.get("net_income")
+        if val is not None:
+            val = val / 1_000_000
+        data_cell = ws.cell(row=40, column=4, value=val)
+    
     data_cell.number_format = '#,##0'
     data_cell.font = data_arial_font
 
