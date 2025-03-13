@@ -604,7 +604,7 @@ def write_analyses_sheet(writer, final_output):
 def write_profit_desc_sheet(writer, final_output):
     """
     Write the profit description sheet with updated handling for operating earnings breakdowns
-    and Non-GAAP Earnings calculation from Operating EPS
+    and calculations based on formulas rather than pre-calculated data
     
     Parameters:
     writer: ExcelWriter object
@@ -761,22 +761,33 @@ def write_profit_desc_sheet(writer, final_output):
             y_cell.hyperlink = filing_url
             y_cell.font = Font(name="Times New Roman", size=10, bold=True, italic=True, underline="single", color="0000FF")
             
-    # Step 4: Write Metric Values and Breakdown Values
+    # Step 4: Write Metric Values and Breakdown Values using formulas where appropriate
     for i, year in enumerate(sorted_years):
         year_col = start_col_for_years + i * 2  # Column for the value
         year_data = pdata[year]
         
+        # Map to analyses sheet column for this year
+        analyses_col = 2 + i  # Starting at column B in Analyses sheet
+        analyses_col_letter = get_column_letter(analyses_col)
+        
+        # Map to Co. Desc sheet column for this year
+        co_desc_col = 2 + i  # Starting at column B in Co. Desc sheet
+        co_desc_col_letter = get_column_letter(co_desc_col)
+        
         for metric in metrics_order:
             metric_row = metric_rows.get(metric)
             
-            # Handle non_gaap_earnings - create formula referencing Co. Desc
-            if metric == "non_gaap_earnings":
-                # Find matching column in Co. Desc sheet (year columns start at B)
-                co_desc_col = 2 + i  # Add years index to column B (2)
-                co_desc_col_letter = get_column_letter(co_desc_col)
+            # Skip if metric_row is None
+            if metric_row is None:
+                continue
                 
-                # Formula: Operating EPS (row 6) * Shares Outstanding (row 16)
-                formula = f"='Co. Desc'!{co_desc_col_letter}6*'Co. Desc'!{co_desc_col_letter}16"
+            # Handle specific metrics with formulas
+            revenue_cell_ref = f"{get_column_letter(year_col)}{metric_rows['revenues']}"
+            expenses_cell_ref = f"{get_column_letter(year_col)}{metric_rows['expenses']}"
+            
+            if metric == "amortization_depreciation":
+                # Reference the depreciation row in Analyses sheet
+                formula = f"='Analyses'!{analyses_col_letter}22"  # Assuming row 22 is depreciation in Analyses
                 
                 # Create and format the formula cell
                 cell = ws.cell(row=metric_row, column=year_col, value=formula)
@@ -784,72 +795,147 @@ def write_profit_desc_sheet(writer, final_output):
                 cell.font = Font(name="Arial", italic=True)
                 cell.border = thin_border
                 cell.number_format = '#,##0'
-                continue
+            
+            elif metric == "ebitda":
+                # EBITDA = Net Revenue - Internal Costs + Depreciation
+                amort_depr_cell_ref = f"{get_column_letter(year_col)}{metric_rows['amortization_depreciation']}"
+                formula = f"={revenue_cell_ref}-{expenses_cell_ref}+{amort_depr_cell_ref}"
                 
-            metric_val = year_data.get(metric)
-            if metric_val is None:
-                continue
+                cell = ws.cell(row=metric_row, column=year_col, value=formula)
+                cell.fill = data_fill
+                cell.font = Font(name="Arial", italic=True)
+                cell.border = thin_border
+                cell.number_format = '#,##0'
+            
+            elif metric == "free_cash_flow":
+                # Free Cash Flow = EBITDA - CapEx
+                ebitda_cell_ref = f"{get_column_letter(year_col)}{metric_rows['ebitda']}"
+                capex_cell_ref = f"{get_column_letter(year_col)}{metric_rows['capex']}"
+                formula = f"={ebitda_cell_ref}-{capex_cell_ref}"
+                
+                cell = ws.cell(row=metric_row, column=year_col, value=formula)
+                cell.fill = data_fill
+                cell.font = Font(name="Arial", italic=True)
+                cell.border = thin_border
+                cell.number_format = '#,##0'
+            
+            elif metric == "operating_earnings":
+                # Operating Margin = Net Revenues - Internal Costs
+                formula = f"={revenue_cell_ref}-{expenses_cell_ref}"
+                
+                cell = ws.cell(row=metric_row, column=year_col, value=formula)
+                cell.fill = data_fill
+                cell.font = Font(name="Arial", italic=True)
+                cell.border = thin_border
+                cell.number_format = '#,##0'
+                
+            elif metric == "earnings":
+                # Earnings = Operating Margin - External Costs
+                op_margin_cell_ref = f"{get_column_letter(year_col)}{metric_rows['operating_earnings']}"
+                ext_costs_cell_ref = f"{get_column_letter(year_col)}{metric_rows['external_costs']}"
+                formula = f"={op_margin_cell_ref}-{ext_costs_cell_ref}"
+                
+                cell = ws.cell(row=metric_row, column=year_col, value=formula)
+                cell.fill = data_fill
+                cell.font = Font(name="Arial", italic=True)
+                cell.border = thin_border
+                cell.number_format = '#,##0'
+                
+            elif metric == "non_gaap_earnings":
+                # Non-GAAP Earnings formula (retained from original)
+                formula = f"='Co. Desc'!{co_desc_col_letter}6*'Co. Desc'!{co_desc_col_letter}16"
+                
+                cell = ws.cell(row=metric_row, column=year_col, value=formula)
+                cell.fill = data_fill
+                cell.font = Font(name="Arial", italic=True)
+                cell.border = thin_border
+                cell.number_format = '#,##0'
+                
+            elif metric == "share_buybacks_from_stmt_cf":
+                # Reference the buyback line in Co. Desc sheet
+                formula = f"='Co. Desc'!{co_desc_col_letter}17"
+                
+                cell = ws.cell(row=metric_row, column=year_col, value=formula)
+                cell.fill = data_fill
+                cell.font = Font(name="Arial", italic=True)
+                cell.border = thin_border
+                cell.number_format = '#,##0'
+                
+            elif metric == "dividend_paid_pct_fcf":
+                # Dividend Paid % of FCF = Dividend Paid / Free Cash Flow
+                dividend_cell_ref = f"{get_column_letter(year_col)}{metric_rows['dividend_paid']}"
+                fcf_cell_ref = f"{get_column_letter(year_col)}{metric_rows['free_cash_flow']}"
+                formula = f"={dividend_cell_ref}/{fcf_cell_ref}"
+                
+                cell = ws.cell(row=metric_row, column=year_col, value=formula)
+                cell.fill = data_fill
+                cell.font = Font(name="Arial", italic=True)
+                cell.border = thin_border
+                cell.number_format = '0.0%'
+                
+            else:
+                # For other metrics, use the original data values
+                metric_val = year_data.get(metric)
+                if isinstance(metric_val, dict) and (
+                    ("total_" + metric) in metric_val  # for operating_earnings
+                    or ("total_" + metric.replace("_earnings", "")) in metric_val  # for revenues/external_costs
+                ):
+                    # Handle metrics with breakdowns (including operating earnings)
+                    # Handle both operating_earnings and other metrics
+                    total_key = "total_operating_earnings" if metric == "operating_earnings" else "total_" + metric.replace("_earnings", "")
+                    
+                    if total_key in metric_val:
+                        val = to_float(metric_val[total_key])
+                        if val is not None:
+                            val = val / 1_000_000
+                        cell = ws.cell(row=metric_row, column=year_col, value=val)
+                        cell.fill = data_fill
+                        cell.font = Font(name="Arial", italic=True)
+                        cell.number_format = '#,##0'
+                        cell.border = thin_border
 
-            if isinstance(metric_val, dict) and (
-                ("total_" + metric) in metric_val  # for operating_earnings
-                or ("total_" + metric.replace("_earnings", "")) in metric_val  # for revenues/external_costs
-            ):
-                # Handle metrics with breakdowns (including operating earnings)
-                # Handle both operating_earnings and other metrics
-                total_key = "total_operating_earnings" if metric == "operating_earnings" else "total_" + metric.replace("_earnings", "")
-                
-                if total_key in metric_val:
-                    val = to_float(metric_val[total_key])
-                    if val is not None:
+                    # Write breakdown items
+                    breakdown_items = metric_val.get("breakdown", {})
+                    for (m, bkey), brow in breakdown_rows.items():
+                        if m == metric and bkey in breakdown_items:
+                            breakdown_val = breakdown_items[bkey]
+                            if breakdown_val is not None:
+                                breakdown_val = to_float(breakdown_val)
+                                if breakdown_val is not None:
+                                    breakdown_val = breakdown_val / 1_000_000
+                                bdata_cell = ws.cell(row=brow, column=year_col, value=breakdown_val)
+                                bdata_cell.font = data_arial_italic_font
+                                bdata_cell.number_format = '#,##0'
+                                
+                                # Add appropriate CAGR values
+                                if metric == "revenues":
+                                    cagr_key = f"cagr_revenues_{bkey}_percent"
+                                    cagr_value = pchar.get("cagr_revenues_breakdown_percent", {}).get(cagr_key)
+                                    if cagr_value is not None:
+                                        cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
+                                        cagr_cell.font = Font(name="Arial", italic=True, size=8)
+                                        cagr_cell.number_format = '0.0%'
+                                elif metric == "operating_earnings":
+                                    cagr_key = f"cagr_operating_earnings_{bkey}_percent"
+                                    cagr_value = pchar.get("cagr_operating_earnings_breakdown_percent", {}).get(cagr_key)
+                                    if cagr_value is not None:
+                                        cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
+                                        cagr_cell.font = Font(name="Arial", italic=True, size=8)
+                                        cagr_cell.number_format = '0.0%'
+
+                else:
+                    # Handle metrics without breakdowns
+                    val = to_float(metric_val)
+                    if val is not None and metric not in percent_metrics:
                         val = val / 1_000_000
                     cell = ws.cell(row=metric_row, column=year_col, value=val)
                     cell.fill = data_fill
                     cell.font = Font(name="Arial", italic=True)
-                    cell.number_format = '#,##0'
                     cell.border = thin_border
-
-                # Write breakdown items
-                breakdown_items = metric_val.get("breakdown", {})
-                for (m, bkey), brow in breakdown_rows.items():
-                    if m == metric and bkey in breakdown_items:
-                        breakdown_val = breakdown_items[bkey]
-                        if breakdown_val is not None:
-                            breakdown_val = to_float(breakdown_val)
-                            if breakdown_val is not None:
-                                breakdown_val = breakdown_val / 1_000_000
-                            bdata_cell = ws.cell(row=brow, column=year_col, value=breakdown_val)
-                            bdata_cell.font = data_arial_italic_font
-                            bdata_cell.number_format = '#,##0'
-                            
-                            # Add appropriate CAGR values
-                            if metric == "revenues":
-                                cagr_key = f"cagr_revenues_{bkey}_percent"
-                                cagr_value = pchar.get("cagr_revenues_breakdown_percent", {}).get(cagr_key)
-                                if cagr_value is not None:
-                                    cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
-                                    cagr_cell.font = Font(name="Arial", italic=True, size=8)
-                                    cagr_cell.number_format = '0.0%'
-                            elif metric == "operating_earnings":
-                                cagr_key = f"cagr_operating_earnings_{bkey}_percent"
-                                cagr_value = pchar.get("cagr_operating_earnings_breakdown_percent", {}).get(cagr_key)
-                                if cagr_value is not None:
-                                    cagr_cell = ws.cell(row=brow, column=3, value=cagr_value)
-                                    cagr_cell.font = Font(name="Arial", italic=True, size=8)
-                                    cagr_cell.number_format = '0.0%'
-
-            else:
-                # Handle metrics without breakdowns
-                val = to_float(metric_val)
-                if val is not None and metric not in percent_metrics:
-                    val = val / 1_000_000
-                cell = ws.cell(row=metric_row, column=year_col, value=val)
-                cell.fill = data_fill
-                cell.font = Font(name="Arial", italic=True)
-                cell.border = thin_border
-                if metric not in percent_metrics:
-                    cell.number_format = '#,##0'
-                else:
-                    cell.number_format = '0.0%'
+                    if metric not in percent_metrics:
+                        cell.number_format = '#,##0'
+                    else:
+                        cell.number_format = '0.0%'
 
     # Step 5: Write CAGR Values
     cagr_map = {
@@ -895,78 +981,78 @@ def write_profit_desc_sheet(writer, final_output):
             cagr_cell.font = Font(name="Arial", italic=True, size=8)
             cagr_cell.number_format = '0.00%'
 
-    # Step 6: Compute and Write Percentages
+    # Step 6: Compute and Write Percentages for every metric related to revenues
     revenues_row = metric_rows.get("revenues")
-    expense_breakdowns = ["cost_of_revenue", "research_and_development", "selling_marketing_general_admin"]
-    top_metrics = ["ebitda", "operating_earnings", "earnings", "non_gaap_earnings"]  # Added non_gaap_earnings to the list
-
+    
+    # Define which metrics should get percentage calculations
+    percentage_metrics = [
+        "expenses", "ebitda", "amortization_depreciation", "operating_earnings", 
+        "external_costs", "earnings", "non_gaap_earnings"
+    ]
+    
     for i, year in enumerate(sorted_years):
         year_col = start_col_for_years + i * 2
-        rev_val = ws.cell(row=revenues_row, column=year_col).value
-        if rev_val is None or rev_val == 0:
-            continue
+        rev_cell_ref = f"{get_column_letter(year_col)}{revenues_row}"
 
         # Calculate percentages for all revenue breakdowns
         for bkey in all_revenue_breakdowns:
             br_key = ("revenues", bkey)
             if br_key in breakdown_rows:
                 brow = breakdown_rows[br_key]
-                metric_val = ws.cell(row=brow, column=year_col).value
-                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
-                    percent = (metric_val / rev_val) * 100
-                    percent_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
-                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+                metric_cell_ref = f"{get_column_letter(year_col)}{brow}"
+                # Only display percentage if metric value is nonzero
+                percent_formula = f"=IF({metric_cell_ref}<>0,{metric_cell_ref}/{rev_cell_ref},\"\")"
+                
+                percent_cell = ws.cell(row=brow, column=year_col + 1, value=percent_formula)
+                percent_cell.font = Font(name="Arial", italic=True, size=8)
+                percent_cell.number_format = '0.0%'
 
         # Calculate percentages for expense breakdowns
-        for bkey in expense_breakdowns:
+        for bkey in all_expense_breakdowns:
             br_key = ("expenses", bkey)
             if br_key in breakdown_rows:
                 brow = breakdown_rows[br_key]
-                metric_val = ws.cell(row=brow, column=year_col).value
-                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
-                    percent = (metric_val / rev_val) * 100
-                    percent_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
-                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+                metric_cell_ref = f"{get_column_letter(year_col)}{brow}"
+                percent_formula = f"={metric_cell_ref}/{rev_cell_ref}"
+                
+                percent_cell = ws.cell(row=brow, column=year_col + 1, value=percent_formula)
+                percent_cell.font = Font(name="Arial", italic=True, size=8)
+                percent_cell.number_format = '0.0%'
 
         # Calculate percentages for external costs breakdowns
         for bkey in all_external_costs_breakdowns:
             br_key = ("external_costs", bkey)
             if br_key in breakdown_rows:
                 brow = breakdown_rows[br_key]
-                metric_val = ws.cell(row=brow, column=year_col).value
-                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
-                    percent = (metric_val / rev_val) * 100
-                    percent_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
-                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+                metric_cell_ref = f"{get_column_letter(year_col)}{brow}"
+                percent_formula = f"={metric_cell_ref}/{rev_cell_ref}"
+                
+                percent_cell = ws.cell(row=brow, column=year_col + 1, value=percent_formula)
+                percent_cell.font = Font(name="Arial", italic=True, size=8)
+                percent_cell.number_format = '0.0%'
 
         # Calculate percentages for operating earnings breakdowns
         for bkey in all_operating_earnings_breakdowns:
             br_key = ("operating_earnings", bkey)
             if br_key in breakdown_rows:
                 brow = breakdown_rows[br_key]
-                metric_val = ws.cell(row=brow, column=year_col).value
-                if isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
-                    percent = (metric_val / rev_val) * 100
-                    percent_cell = ws.cell(row=brow, column=year_col + 1, value=f"{percent:.1f}%")
-                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+                metric_cell_ref = f"{get_column_letter(year_col)}{brow}"
+                percent_formula = f"={metric_cell_ref}/{rev_cell_ref}"
+                
+                percent_cell = ws.cell(row=brow, column=year_col + 1, value=percent_formula)
+                percent_cell.font = Font(name="Arial", italic=True, size=8)
+                percent_cell.number_format = '0.0%'
 
-        # Calculate percentages for top metrics
-        for tm in top_metrics:
+        # Calculate percentages for main metrics (use formulas for all)
+        for tm in percentage_metrics:
             if tm in metric_rows:
                 tm_row = metric_rows[tm]
-                metric_val = ws.cell(row=tm_row, column=year_col).value
+                metric_cell_ref = f"{get_column_letter(year_col)}{tm_row}"
+                percent_formula = f"={metric_cell_ref}/{rev_cell_ref}"
                 
-                # For non_gaap_earnings, use the formula reference
-                if tm == "non_gaap_earnings":
-                    # The percentage formula needs to reference the cell with the formula
-                    percent_formula = f"={ws.cell(row=tm_row, column=year_col).coordinate}/{ws.cell(row=revenues_row, column=year_col).coordinate}"
-                    percent_cell = ws.cell(row=tm_row, column=year_col + 1, value=percent_formula)
-                    percent_cell.font = Font(name="Arial", italic=True, size=8)
-                    percent_cell.number_format = '0.0%'
-                elif isinstance(metric_val, (int, float)) and metric_val is not None and rev_val != 0:
-                    percent = (metric_val / rev_val) * 100
-                    percent_cell = ws.cell(row=tm_row, column=year_col + 1, value=f"{percent:.1f}%")
-                    percent_cell.font = Font(name="Arial", italic=True, size=8)
+                percent_cell = ws.cell(row=tm_row, column=year_col + 1, value=percent_formula)
+                percent_cell.font = Font(name="Arial", italic=True, size=8)
+                percent_cell.number_format = '0.0%'
 
 def write_balance_sheet_sheet(writer, final_output):
     reported_currency = final_output["summary"]["reported_currency"]
@@ -1249,9 +1335,11 @@ def write_studies_sheet(writer, final_output):
     data_cell.font = data_arial_font
     ws.cell(row=41, column=5, value="Merger charges, writedowns above the line, dep. Amort below the line less capex").font = data_arial_font
 
+    # Years Payback - now using formula =D39/(D40+D41) instead of static value
     ws.cell(row=42, column=3, value="Years Payback:").font = label_font
-    data_cell = ws.cell(row=42, column=4, value=anip.get("years_payback"))
-    data_cell.number_format = '#,##0'
+    formula = "=D39/(D40+D41)"
+    data_cell = ws.cell(row=42, column=4, value=formula)
+    data_cell.number_format = '#,##0.0'
     data_cell.font = data_arial_font
     
     # Apply data fills to specified ranges
