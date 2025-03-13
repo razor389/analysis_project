@@ -1480,7 +1480,7 @@ def write_industry_sheet(writer, final_output):
     op_stats_cell.border = thin_border
     
     # Get companies (tickers)
-    companies = industry_data["operatingStatistics"].keys()
+    companies = list(industry_data["operatingStatistics"].keys())
     
     # Define the operating statistics columns and their formats
     op_stats_columns = {
@@ -1503,7 +1503,7 @@ def write_industry_sheet(writer, final_output):
         cell.alignment = center_alignment
 
     # Write company data
-    for company in companies:
+    for idx, company in enumerate(companies):
         row += 1
         # Write company name
         company_cell = ws.cell(row=row, column=2, value=company)
@@ -1520,15 +1520,20 @@ def write_industry_sheet(writer, final_output):
         }
 
         for label, (col, key) in col_mappings.items():
-            value = company_data[key]
-            cell = ws.cell(row=row, column=col, value=value)
+            # For the first company's Debt(yrs.) cell, reference cell D42 from Studies sheet
+            if idx == 0 and label == "Debt(yrs.)":
+                cell = ws.cell(row=row, column=col, value="='Studies'!D42")
+            else:
+                value = company_data[key]
+                cell = ws.cell(row=row, column=col, value=value)
+                
+                # Convert Sales to millions
+                if key == "Sales":
+                    cell.value = value / 1_000_000
+            
             cell.font = data_arial_font
             cell.alignment = center_alignment
             cell.number_format = op_stats_columns[label][1]
-
-            # Convert Sales to millions
-            if key == "Sales":
-                cell.value = value / 1_000_000
 
     last_op_stats_row = row
 
