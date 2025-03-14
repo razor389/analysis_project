@@ -2188,6 +2188,89 @@ def write_segmentation_sheet(writer, final_output):
     for col in range(2, growth_col + 1):
         ws.column_dimensions[get_column_letter(col)].width = 12
 
+def sync_operating_margin_from_profit_desc(writer):
+    """
+    Updates the operating margin row in the Analyses sheet with formula references 
+    to the corresponding percentage cells in the Profit.Desc. sheet.
+    
+    This function replaces static values or existing formulas with direct references
+    to ensure both sheets always show the same operating margin percentages.
+    
+    Parameters:
+    writer: ExcelWriter object with access to the workbook
+    """
+    wb = writer.book
+    
+    # Ensure both required sheets exist
+    if "Analyses" not in wb.sheetnames or "Profit.Desc." not in wb.sheetnames:
+        print("Warning: Cannot sync operating margin - required sheets not found")
+        return
+    
+    analyses_ws = wb["Analyses"]
+    profit_desc_ws = wb["Profit.Desc."]
+    
+    # Find the operating margin row in analyses sheet (should be row 20)
+    operating_margin_row = 20  # Default from the original code
+    
+    # Find the operating margin row and year columns in profit_desc sheet
+    operating_margin_row_pd = None
+    op_margin_label = "Operating Margin:"
+    
+    # Find the row with "Operating Margin:" label in column A
+    for row in range(1, profit_desc_ws.max_row + 1):
+        cell_value = profit_desc_ws.cell(row=row, column=1).value
+        if cell_value == op_margin_label:
+            operating_margin_row_pd = row
+            break
+    
+    if operating_margin_row_pd is None:
+        print("Warning: 'Operating Margin:' row not found in Profit.Desc. sheet")
+        return
+    
+    # Find the year columns in both sheets
+    # In Analyses, years start at column B (index 2)
+    # In Profit.Desc, years start at column D (index 4) and appear every 2 columns
+    
+    # Get years from Analyses sheet
+    analyses_years = []
+    col = 2  # Starting at column B
+    while True:
+        year_cell = analyses_ws.cell(row=9, column=col)  # Where years are in Analyses
+        if year_cell.value is None:
+            break
+        analyses_years.append((col, str(year_cell.value)))
+        col += 1
+    
+    # Get years from Profit.Desc sheet
+    profit_desc_years = []
+    col = 4  # Starting at column D
+    while True:
+        year_cell = profit_desc_ws.cell(row=3, column=col)  # Where years are in Profit.Desc
+        if year_cell.value is None or col > profit_desc_ws.max_column:
+            break
+        profit_desc_years.append((col, str(year_cell.value)))
+        col += 2  # Skip percentage column
+    
+    # Match years and create formula references
+    for a_col, a_year in analyses_years:
+        for pd_col, pd_year in profit_desc_years:
+            if a_year == pd_year:
+                # Found matching year
+                # Create a reference to the percentage cell (column to the right of value in Profit.Desc)
+                target_col = pd_col + 1  # Percentage column is one to the right of the year column
+                
+                # Create formula referencing the percentage cell in Profit.Desc
+                formula = f"='Profit.Desc.'!{get_column_letter(target_col)}{operating_margin_row_pd}"
+                
+                # Update the cell in Analyses with the formula
+                cell = analyses_ws.cell(row=operating_margin_row, column=a_col, value=formula)
+                
+                # Format as percentage
+                cell.number_format = '0.0%'
+                break
+    
+    print("Successfully added operating margin formula references from Profit.Desc. to Analyses sheet")
+
 def generate_config_note(ticker, wb):
     """
     Add a note in cell B1 of the profit_desc sheet if there are any
@@ -2270,6 +2353,7 @@ def generate_excel_for_ticker_year(ticker: str, year: int):
     write_company_description(writer, final_output)
     write_analyses_sheet(writer, final_output)
     write_profit_desc_sheet(writer, final_output)
+    sync_operating_margin_from_profit_desc(writer)
     write_balance_sheet_sheet(writer, final_output)
     write_studies_sheet(writer, final_output)
     write_qualities_sheet(writer, final_output)
@@ -2306,6 +2390,7 @@ if __name__ == "__main__":
     write_company_description(writer, final_output)
     write_analyses_sheet(writer, final_output)
     write_profit_desc_sheet(writer, final_output)
+    sync_operating_margin_from_profit_desc(writer)
     write_balance_sheet_sheet(writer, final_output)
     write_studies_sheet(writer, final_output)
     write_qualities_sheet(writer, final_output)
