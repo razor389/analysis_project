@@ -1466,7 +1466,8 @@ def write_qualities_sheet(writer, final_output):
 
 def write_industry_sheet(writer, final_output):
     """
-    Write the Industry sheet with operating and market statistics
+    Write the Industry sheet with operating and market statistics.
+    For the first company's Operating Margin, references the most recent year's value in the Analyses sheet.
     
     Parameters:
     writer: ExcelWriter object
@@ -1522,6 +1523,21 @@ def write_industry_sheet(writer, final_output):
         cell.border = thin_border
         cell.alignment = center_alignment
 
+    # Get the most recent year from the Analyses sheet for operating margin reference
+    most_recent_year_col = None
+    if "Analyses" in wb.sheetnames:
+        analyses_ws = wb["Analyses"]
+        
+        # Find the last year column in the Analyses sheet
+        # Years are in row 9, starting from column B (2)
+        col = 2
+        while True:
+            year_cell = analyses_ws.cell(row=9, column=col)
+            if year_cell.value is None or col > analyses_ws.max_column:
+                break
+            most_recent_year_col = col
+            col += 1
+    
     # Write company data
     for idx, company in enumerate(companies):
         row += 1
@@ -1540,9 +1556,20 @@ def write_industry_sheet(writer, final_output):
         }
 
         for label, (col, key) in col_mappings.items():
-            # For the first company's Debt(yrs.) cell, reference cell D42 from Studies sheet
-            if idx == 0 and label == "Debt(yrs.)":
-                cell = ws.cell(row=row, column=col, value="='Studies'!D42")
+            # Special handling for first company's debt years and operating margin
+            if idx == 0:
+                if label == "Debt(yrs.)":
+                    cell = ws.cell(row=row, column=col, value="='Studies'!D42")
+                elif label == "Operating Margin" and most_recent_year_col is not None:
+                    # Reference the most recent year's operating margin in Analyses sheet
+                    cell = ws.cell(row=row, column=col, value=f"='Analyses'!{get_column_letter(most_recent_year_col-2)}20")
+                else:
+                    value = company_data[key]
+                    cell = ws.cell(row=row, column=col, value=value)
+                    
+                    # Convert Sales to millions
+                    if key == "Sales":
+                        cell.value = value / 1_000_000
             else:
                 value = company_data[key]
                 cell = ws.cell(row=row, column=col, value=value)
