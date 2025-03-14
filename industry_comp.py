@@ -89,7 +89,10 @@ def calculate_statistics(ticker, financial_data):
         shares_outstanding = ic.get('weightedAverageShsOut', 0)
         revenues = ic.get('revenue', 0)
         net_profit = ic.get('netIncome', 0)
-        ebit = ic.get('operatingIncome', 0)
+        cost_of_revenue = ic.get('costOfRevenue') or 0
+        cost_of_res_and_dev = ic.get('researchAndDevelopmentExpenses') or 0
+        cost_of_selling_and_marketing_gen_and_admin = ic.get('sellingGeneralAndAdministrativeExpenses') or 0
+        expenses = cost_of_selling_and_marketing_gen_and_admin + cost_of_res_and_dev + cost_of_revenue
         shareholder_equity = bs.get('totalStockholdersEquity', 0)
         logger.debug(f"Base metrics - Price: {current_stock_price}, Shares: {shares_outstanding}, Revenue: {revenues}")
         
@@ -101,7 +104,8 @@ def calculate_statistics(ticker, financial_data):
         logger.debug(f"Debt calculations - Total debt: {total_debt}, LT debt: {lt_debt}")
         
         # Operating Statistics Calculations
-        operating_margin = (ebit / revenues) if revenues else 0
+        operating_margin = (revenues - expenses) / revenues if revenues else None
+
         total_capital = shareholder_equity + lt_debt
         roc = (net_profit / total_capital) if total_capital else 0
         

@@ -312,7 +312,7 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         fcf = ebitda + capex if ebitda and capex else None
 
         # Operating margin = ebit / revenue
-        operating_margin = (ebit / revenues) if (ebit and revenues) else None
+        operating_margin = (revenues - expenses) / revenues if revenues else None
 
         # Operating EPS = Net Profit / Shares Outstanding
         operating_eps = None
