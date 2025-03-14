@@ -811,7 +811,7 @@ def write_profit_desc_sheet(writer, final_output):
                 # Free Cash Flow = EBITDA - CapEx
                 ebitda_cell_ref = f"{get_column_letter(year_col)}{metric_rows['ebitda']}"
                 capex_cell_ref = f"{get_column_letter(year_col)}{metric_rows['capex']}"
-                formula = f"={ebitda_cell_ref}-{capex_cell_ref}"
+                formula = f"={ebitda_cell_ref}+{capex_cell_ref}"
                 
                 cell = ws.cell(row=metric_row, column=year_col, value=formula)
                 cell.fill = data_fill
