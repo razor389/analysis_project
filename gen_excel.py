@@ -601,7 +601,7 @@ def write_analyses_sheet(writer, final_output):
             cell.border = thin_border
             cell.number_format = number_formats[metric]
 
-def write_profit_desc_sheet(writer, final_output):
+def write_profit_desc_sheet(writer, final_output, no_add_da=False):
     """
     Write the profit description sheet with updated handling for operating earnings breakdowns
     and calculations based on formulas rather than pre-calculated data
@@ -797,9 +797,14 @@ def write_profit_desc_sheet(writer, final_output):
                 cell.number_format = '#,##0'
             
             elif metric == "ebitda":
-                # EBITDA = Net Revenue - Internal Costs + Depreciation
-                amort_depr_cell_ref = f"{get_column_letter(year_col)}{metric_rows['amortization_depreciation']}"
-                formula = f"={revenue_cell_ref}-{expenses_cell_ref}+{amort_depr_cell_ref}"
+                # EBITDA calculation depends on no_add_da flag
+                if no_add_da:
+                    # Just Net Revenue - Internal Costs (no depreciation added back)
+                    formula = f"={revenue_cell_ref}-{expenses_cell_ref}"
+                else:
+                    # Net Revenue - Internal Costs + Depreciation
+                    amort_depr_cell_ref = f"{get_column_letter(year_col)}{metric_rows['amortization_depreciation']}"
+                    formula = f"={revenue_cell_ref}-{expenses_cell_ref}+{amort_depr_cell_ref}"
                 
                 cell = ws.cell(row=metric_row, column=year_col, value=formula)
                 cell.fill = data_fill
@@ -2356,7 +2361,7 @@ def generate_config_note(ticker, wb):
         cell.font = Font(italic=True, size=9, color="666666")
         cell.fill = PatternFill(start_color="FFFFE0", end_color="FFFFE0", fill_type="solid")
 
-def generate_excel_for_ticker_year(ticker: str, year: int):
+def generate_excel_for_ticker_year(ticker: str, year: int, no_add_da: bool = False):
     """
     Generate the Excel file for the given ticker and year, writing to:
        ./output/{ticker}.{last 2 digits of year}.2.xlsx
@@ -2379,7 +2384,7 @@ def generate_excel_for_ticker_year(ticker: str, year: int):
     write_summary_sheet(writer, final_output)
     write_company_description(writer, final_output)
     write_analyses_sheet(writer, final_output)
-    write_profit_desc_sheet(writer, final_output)
+    write_profit_desc_sheet(writer, final_output, no_add_da)
     sync_operating_margin_from_profit_desc(writer)
     write_balance_sheet_sheet(writer, final_output)
     write_studies_sheet(writer, final_output)

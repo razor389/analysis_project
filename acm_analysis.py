@@ -1217,6 +1217,8 @@ if __name__ == "__main__":
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--basic_segmentation', action='store_true', 
                        help='Use basic FMP segmentation instead of unified')
+    parser.add_argument('--no_add_da', action='store_true',
+                       help='When calculating EBITDA, do not add back depreciation and amortization')
     args = parser.parse_args()
 
     symbol = args.symbol.upper()
@@ -1368,6 +1370,6 @@ if __name__ == "__main__":
 
     # 2) Generate the Excel file using our function:
     try:
-        generate_excel_for_ticker_year(symbol, end_year)
+        generate_excel_for_ticker_year(symbol, end_year, no_add_da=args.no_add_da)
     except Exception as e:
         print(f"Error generating Excel for {symbol} - {end_year}: {e}")
