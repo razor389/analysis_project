@@ -832,9 +832,13 @@ def write_profit_desc_sheet(writer, final_output, no_add_da=False):
                 cell.number_format = '#,##0'
             
             elif metric == "operating_earnings":
-                # Operating Margin = Net Revenues - Internal Costs
-                formula = f"={revenue_cell_ref}-{expenses_cell_ref}"
-                
+                # Operating Margin
+                if no_add_da:
+                    amort_depr_cell_ref = f"{get_column_letter(year_col)}{metric_rows['amortization_depreciation']}"
+                    formula = f"={revenue_cell_ref}-{expenses_cell_ref}-{amort_depr_cell_ref}"
+                else:
+                    # Net Revenue - Internal Costs 
+                    formula = f"={revenue_cell_ref}-{expenses_cell_ref}"
                 cell = ws.cell(row=metric_row, column=year_col, value=formula)
                 cell.fill = data_fill
                 cell.font = Font(name="Arial", italic=True)
