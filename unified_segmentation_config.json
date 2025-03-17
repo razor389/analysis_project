@@ -105,7 +105,7 @@
         },
         "operating_income": {
             "tag": "us-gaap:OperatingIncomeLoss",
-            "axes": ["US-GAAP Statement Business Segments Axis", "Product Or Service Axis"],
+            "axes": ["US-GAAP Statement Business Segments Axis"],
             "name_mapping": {
                 "meta:FamilyOfAppsMember": "Family Of Apps",
                 "meta:RealityLabsMember": "Reality Labs",
