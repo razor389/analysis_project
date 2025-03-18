@@ -1660,6 +1660,7 @@ def write_industry_sheet(writer, final_output):
 def write_hist_pricing_sheet(writer, final_output):
     """
     Write the Historical Pricing sheet with average ratios and price implications in a 2x2 grid layout
+    Using formulas to calculate average low and high ratios based on historical data
     
     Parameters:
     writer: ExcelWriter object
@@ -1682,7 +1683,7 @@ def write_hist_pricing_sheet(writer, final_output):
     apply_table_border(ws, 1, 3, 6)
     title_fill_range(ws, 1, 3, 6)
 
-    # Get the first new year column letter from Co. Desc sheet for formulas
+    # Get all years from Co. Desc sheet for formulas
     sorted_years = sorted(final_output["company_description"]["data"].keys(), key=lambda x: int(x))
     if sorted_years:
         max_year = max(int(year) for year in sorted_years)
@@ -1691,13 +1692,17 @@ def write_hist_pricing_sheet(writer, final_output):
         first_new_year_col = get_column_letter(2 + len(sorted_years))
     else:
         first_new_year_col = "B"  # fallback
+    
+    # Get the range of historical years for our average calculations
+    first_hist_year_col = get_column_letter(2)  # Column B in Co. Desc
+    last_hist_year_col = get_column_letter(2 + len(sorted_years) - 1)  # Last historical year column
 
     # Define the grid positions for each metric
     metrics = {
         # Top Left - P/E Ratio
         "P/E Ratio": {
-            "low_key": "avg_pe_low",
-            "high_key": "avg_pe_high",
+            "low_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9/'Co. Desc'!{first_hist_year_col}6:{last_hist_year_col}6)",
+            "high_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10/'Co. Desc'!{first_hist_year_col}6:{last_hist_year_col}6)",
             "current_formula": f"='Co. Desc'!{first_new_year_col}5",  # References diluted EPS
             "start_row": 3,
             "start_col": 2,
@@ -1706,8 +1711,8 @@ def write_hist_pricing_sheet(writer, final_output):
         },
         # Top Right - P/S Ratio
         "P/S Ratio": {
-            "low_key": "avg_ps_low",
-            "high_key": "avg_ps_high",
+            "low_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9/'Analyses'!{first_hist_year_col}11:{last_hist_year_col}11)",
+            "high_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10/'Analyses'!{first_hist_year_col}11:{last_hist_year_col}11)",
             "current_formula": f"='Analyses'!{first_new_year_col}11",  # References Sales/Share
             "start_row": 3,
             "start_col": 8,
@@ -1716,8 +1721,8 @@ def write_hist_pricing_sheet(writer, final_output):
         },
         # Bottom Left - P/B Ratio
         "P/B Ratio": {
-            "low_key": "avg_pb_low",
-            "high_key": "avg_pb_high",
+            "low_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9/'Co. Desc'!{first_hist_year_col}20:{last_hist_year_col}20)",
+            "high_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10/'Co. Desc'!{first_hist_year_col}20:{last_hist_year_col}20)",
             "current_formula": f"='Co. Desc'!{first_new_year_col}20",  # References Book Value/Share
             "start_row": 10,
             "start_col": 2,
@@ -1726,8 +1731,8 @@ def write_hist_pricing_sheet(writer, final_output):
         },
         # Bottom Right - P/CF Ratio
         "P/CF Ratio": {
-            "low_key": "avg_pcf_low",
-            "high_key": "avg_pcf_high",
+            "low_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9/(('Co. Desc'!{first_hist_year_col}4:{last_hist_year_col}4+'Analyses'!{first_hist_year_col}22:{last_hist_year_col}22)/'Co. Desc'!{first_hist_year_col}16:{last_hist_year_col}16))",
+            "high_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10/(('Co. Desc'!{first_hist_year_col}4:{last_hist_year_col}4+'Analyses'!{first_hist_year_col}22:{last_hist_year_col}22)/'Co. Desc'!{first_hist_year_col}16:{last_hist_year_col}16))",
             "current_formula": f"=('Co. Desc'!{first_new_year_col}4+'Analyses'!{first_new_year_col}22)/'Co. Desc'!{first_new_year_col}16",  # (Net Profit + Depreciation) / Shares Outstanding
             "start_row": 10,
             "start_col": 8,
@@ -1751,12 +1756,12 @@ def write_hist_pricing_sheet(writer, final_output):
         
         # Write metric rows vertically
         metrics_data = [
-            ("Used", props["current_formula"]),  # Now using formula instead of value
-            ("Avg Low", hist_pricing.get(props["low_key"])),
-            ("Avg High", hist_pricing.get(props["high_key"]))
+            ("Used", props["current_formula"]),
+            ("Avg Low", props["low_formula"]),
+            ("Avg High", props["high_formula"])
         ]
         
-        for idx, (label, value) in enumerate(metrics_data):
+        for idx, (label, formula) in enumerate(metrics_data):
             # Write label
             label_cell = ws.cell(row=start_row + 1 + idx, column=start_col, value=label)
             label_cell.fill = label_fill
@@ -1764,13 +1769,8 @@ def write_hist_pricing_sheet(writer, final_output):
             label_cell.border = thin_border
             label_cell.alignment = center_alignment
             
-            # Write value or formula
-            if idx == 0:  # "Used" row
-                value_cell = ws.cell(row=start_row + 1 + idx, column=start_col + 1)
-                value_cell.value = value  # This is now a formula
-            else:
-                value_cell = ws.cell(row=start_row + 1 + idx, column=start_col + 1, value=value)
-            
+            # Write formula
+            value_cell = ws.cell(row=start_row + 1 + idx, column=start_col + 1, value=formula)
             value_cell.fill = data_fill
             value_cell.font = data_arial_font
             value_cell.border = thin_border
