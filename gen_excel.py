@@ -1701,8 +1701,8 @@ def write_hist_pricing_sheet(writer, final_output):
     metrics = {
         # Top Left - P/E Ratio
         "P/E Ratio": {
-            "low_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9/'Co. Desc'!{first_hist_year_col}6:{last_hist_year_col}6)",
-            "high_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10/'Co. Desc'!{first_hist_year_col}6:{last_hist_year_col}6)",
+            "low_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9)/('Co. Desc'!{first_hist_year_col}6:{last_hist_year_col}6))",
+            "high_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10)/('Co. Desc'!{first_hist_year_col}6:{last_hist_year_col}6))",
             "current_formula": f"='Co. Desc'!{first_new_year_col}5",  # References diluted EPS
             "start_row": 3,
             "start_col": 2,
@@ -1711,8 +1711,8 @@ def write_hist_pricing_sheet(writer, final_output):
         },
         # Top Right - P/S Ratio
         "P/S Ratio": {
-            "low_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9/'Analyses'!{first_hist_year_col}11:{last_hist_year_col}11)",
-            "high_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10/'Analyses'!{first_hist_year_col}11:{last_hist_year_col}11)",
+            "low_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9)/('Analyses'!{first_hist_year_col}11:{last_hist_year_col}11))",
+            "high_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10)/('Analyses'!{first_hist_year_col}11:{last_hist_year_col}11))",
             "current_formula": f"='Analyses'!{first_new_year_col}11",  # References Sales/Share
             "start_row": 3,
             "start_col": 8,
@@ -1721,8 +1721,8 @@ def write_hist_pricing_sheet(writer, final_output):
         },
         # Bottom Left - P/B Ratio
         "P/B Ratio": {
-            "low_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9/'Co. Desc'!{first_hist_year_col}20:{last_hist_year_col}20)",
-            "high_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10/'Co. Desc'!{first_hist_year_col}20:{last_hist_year_col}20)",
+            "low_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9)/('Co. Desc'!{first_hist_year_col}20:{last_hist_year_col}20))",
+            "high_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10)/('Co. Desc'!{first_hist_year_col}20:{last_hist_year_col}20))",
             "current_formula": f"='Co. Desc'!{first_new_year_col}20",  # References Book Value/Share
             "start_row": 10,
             "start_col": 2,
@@ -1731,8 +1731,8 @@ def write_hist_pricing_sheet(writer, final_output):
         },
         # Bottom Right - P/CF Ratio
         "P/CF Ratio": {
-            "low_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9/(('Co. Desc'!{first_hist_year_col}4:{last_hist_year_col}4+'Analyses'!{first_hist_year_col}22:{last_hist_year_col}22)/'Co. Desc'!{first_hist_year_col}16:{last_hist_year_col}16))",
-            "high_formula": f"=AVERAGE('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10/(('Co. Desc'!{first_hist_year_col}4:{last_hist_year_col}4+'Analyses'!{first_hist_year_col}22:{last_hist_year_col}22)/'Co. Desc'!{first_hist_year_col}16:{last_hist_year_col}16))",
+            "low_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9)/(('Co. Desc'!{first_hist_year_col}4:{last_hist_year_col}4+'Analyses'!{first_hist_year_col}22:{last_hist_year_col}22)/('Co. Desc'!{first_hist_year_col}16:{last_hist_year_col}16)))",
+            "high_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10)/(('Co. Desc'!{first_hist_year_col}4:{last_hist_year_col}4+'Analyses'!{first_hist_year_col}22:{last_hist_year_col}22)/('Co. Desc'!{first_hist_year_col}16:{last_hist_year_col}16)))",
             "current_formula": f"=('Co. Desc'!{first_new_year_col}4+'Analyses'!{first_new_year_col}22)/'Co. Desc'!{first_new_year_col}16",  # (Net Profit + Depreciation) / Shares Outstanding
             "start_row": 10,
             "start_col": 8,
