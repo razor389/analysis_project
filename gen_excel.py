@@ -1687,12 +1687,36 @@ def write_hist_pricing_sheet(writer, final_output):
     first_hist_year_col = get_column_letter(2)  # Column B in Co. Desc
     last_hist_year_col = get_column_letter(2 + len(sorted_years) - 1)  # Last historical year column
 
+    # Create column letter sequence for sumproduct formulas
+    col_letters = [get_column_letter(col) for col in range(2, 2 + len(sorted_years))]
+
+    # Helper function to create comma-separated formulas without escaping issues
+    def create_average_formula(numerator_cell, denominator_cell):
+        terms = []
+        for col in col_letters:
+            num_ref = f"'Co. Desc'!{col}{numerator_cell}"
+            denom_ref = f"'Co. Desc'!{col}{denominator_cell}" if denominator_cell.startswith('6') or denominator_cell.startswith('20') or denominator_cell.startswith('16') else f"'Analyses'!{col}{denominator_cell}"
+            terms.append(f"{num_ref}/{denom_ref}")
+        return f"=AVERAGE({','.join(terms)})"
+    
+    # Helper function for P/CF formula which is more complex
+    def create_pcf_formula(price_cell, profit_cell, depreciation_cell, shares_cell):
+        terms = []
+        for col in col_letters:
+            price_ref = f"'Co. Desc'!{col}{price_cell}"
+            profit_ref = f"'Co. Desc'!{col}{profit_cell}"
+            depr_ref = f"'Analyses'!{col}{depreciation_cell}"
+            shares_ref = f"'Co. Desc'!{col}{shares_cell}"
+            terms.append(f"{price_ref}/(({profit_ref}+{depr_ref})/{shares_ref})")
+        return f"=AVERAGE({','.join(terms)})"
+
     # Define the grid positions for each metric
     metrics = {
         # Top Left - P/E Ratio
         "P/E Ratio": {
-            "low_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9)/('Co. Desc'!{first_hist_year_col}6:{last_hist_year_col}6))",
-            "high_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10)/('Co. Desc'!{first_hist_year_col}6:{last_hist_year_col}6))",
+            # Fixed formula for average P/E ratio
+            "low_formula": create_average_formula("9", "6"),
+            "high_formula": create_average_formula("10", "6"),
             "current_formula": f"='Co. Desc'!{first_new_year_col}5",  # References diluted EPS
             "start_row": 3,
             "start_col": 2,
@@ -1701,8 +1725,9 @@ def write_hist_pricing_sheet(writer, final_output):
         },
         # Top Right - P/S Ratio
         "P/S Ratio": {
-            "low_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9)/('Analyses'!{first_hist_year_col}11:{last_hist_year_col}11))",
-            "high_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10)/('Analyses'!{first_hist_year_col}11:{last_hist_year_col}11))",
+            # Fixed formula for average P/S ratio
+            "low_formula": create_average_formula("9", "11"),
+            "high_formula": create_average_formula("10", "11"),
             "current_formula": f"='Analyses'!{first_new_year_col}11",  # References Sales/Share
             "start_row": 3,
             "start_col": 8,
@@ -1711,8 +1736,9 @@ def write_hist_pricing_sheet(writer, final_output):
         },
         # Bottom Left - P/B Ratio
         "P/B Ratio": {
-            "low_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9)/('Co. Desc'!{first_hist_year_col}20:{last_hist_year_col}20))",
-            "high_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10)/('Co. Desc'!{first_hist_year_col}20:{last_hist_year_col}20))",
+            # Fixed formula for average P/B ratio
+            "low_formula": create_average_formula("9", "20"),
+            "high_formula": create_average_formula("10", "20"),
             "current_formula": f"='Co. Desc'!{first_new_year_col}20",  # References Book Value/Share
             "start_row": 10,
             "start_col": 2,
@@ -1721,8 +1747,9 @@ def write_hist_pricing_sheet(writer, final_output):
         },
         # Bottom Right - P/CF Ratio
         "P/CF Ratio": {
-            "low_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}9:{last_hist_year_col}9)/(('Co. Desc'!{first_hist_year_col}4:{last_hist_year_col}4+'Analyses'!{first_hist_year_col}22:{last_hist_year_col}22)/('Co. Desc'!{first_hist_year_col}16:{last_hist_year_col}16)))",
-            "high_formula": f"=AVERAGE(('Co. Desc'!{first_hist_year_col}10:{last_hist_year_col}10)/(('Co. Desc'!{first_hist_year_col}4:{last_hist_year_col}4+'Analyses'!{first_hist_year_col}22:{last_hist_year_col}22)/('Co. Desc'!{first_hist_year_col}16:{last_hist_year_col}16)))",
+            # Fixed formula for average P/CF ratio - need to divide each year's price by that year's cashflow per share
+            "low_formula": create_pcf_formula("9", "4", "22", "16"),
+            "high_formula": create_pcf_formula("10", "4", "22", "16"),
             "current_formula": f"=('Co. Desc'!{first_new_year_col}4+'Analyses'!{first_new_year_col}22)/'Co. Desc'!{first_new_year_col}16",  # (Net Profit + Depreciation) / Shares Outstanding
             "start_row": 10,
             "start_col": 8,
