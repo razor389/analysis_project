@@ -305,74 +305,64 @@ def write_company_description(writer, final_output):
             col_letter = get_column_letter(col)
             data_cell = None
 
-            if year in new_years:
-                # For new years, we'll add formulas for certain metrics
-                # MODIFIED: Changed the formula logic for diluted_eps and net_profit
-                if metric == "diluted_eps":
-                    # Now diluted_eps will copy the value from operating_eps
-                    formula = f"={col_letter}{metric_positions['operating_eps']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "operating_eps":
-                    # Keep operating_eps as is (user will input)
-                    formula = "" # Empty formula, ready for user input
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "net_profit":
-                    # Now net_profit will be calculated as operating_eps * shares_outstanding
-                    formula = f"={col_letter}{metric_positions['operating_eps']}*{col_letter}{metric_positions['shares_outstanding']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "pe_ratio":
-                    formula = f"=(({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2)/{col_letter}{metric_positions['diluted_eps']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "dividends_per_share":
-                    formula = f"={col_letter}{metric_positions['dividends_paid']}/{col_letter}{metric_positions['shares_outstanding']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "buyback":
-                    prev_col = get_column_letter(col-1)
-                    formula = f"=({prev_col}{metric_positions['shares_outstanding']}-{col_letter}{metric_positions['shares_outstanding']})*({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "avg_dividend_yield":
-                    formula = f"={col_letter}{metric_positions['dividends_per_share']}/((({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2))"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "book_value_per_share":
-                    formula = f"={col_letter}{metric_positions['share_equity']}/{col_letter}{metric_positions['shares_outstanding']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "roe":
-                    formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['share_equity']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "roc":
-                    formula = f"={col_letter}{metric_positions['net_profit']}/({col_letter}{metric_positions['share_equity']}+{col_letter}{metric_positions['long_term_debt']})"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                else:
+            # Determine if we should use formulas based on the metric
+            use_formula = True
+            
+            if metric == "pe_ratio":
+                formula = f"=(({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2)/{col_letter}{metric_positions['operating_eps']}"
+            
+            elif metric == "buyback" and i > 0:  # Skip first year as we need a previous year to compare
+                prev_col = get_column_letter(col-1)
+                formula = f"=({prev_col}{metric_positions['shares_outstanding']}-{col_letter}{metric_positions['shares_outstanding']})*({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2"
+            elif metric == "buyback" and i == 0:  # For the first year, we can't calculate buyback
+                formula = ""
+                use_formula = False
+                value = "N/A"
+            
+            elif metric == "dividends_per_share":
+                formula = f"={col_letter}{metric_positions['dividends_paid']}/{col_letter}{metric_positions['shares_outstanding']}"
+            
+            elif metric == "avg_dividend_yield":
+                formula = f"={col_letter}{metric_positions['dividends_per_share']}/((({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2))"
+            
+            elif metric == "book_value_per_share":
+                formula = f"={col_letter}{metric_positions['share_equity']}/{col_letter}{metric_positions['shares_outstanding']}"
+            
+            elif metric == "roe":
+                formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['share_equity']}"
+            
+            elif metric == "roc":
+                formula = f"={col_letter}{metric_positions['net_profit']}/({col_letter}{metric_positions['share_equity']}+{col_letter}{metric_positions['long_term_debt']})"
+            
+            else:
+                use_formula = False
+            
+            # Apply either formula or value based on the decision
+            if use_formula:
+                data_cell = ws.cell(row=metric_row, column=col, value=formula)
+                # For past years, use normal font; for future years, use italic font
+                data_cell.font = data_tnr_italic_font if year in new_years else data_tnr_font
+            else:
+                # Get the value from data if no formula is used
+                if not (metric == "buyback" and i == 0):  # Skip if it's buyback for the first year
                     value = cd_data.get(year, {}).get(metric)
                     if value is not None and metric in million_scale_metrics:
                         value = value / 1_000_000
-                    data_cell = ws.cell(row=metric_row, column=col, value=value)
-
-                data_cell.font = data_tnr_italic_font
-                data_cell.alignment = right_alignment
-            
-            else:
-                value = cd_data.get(year, {}).get(metric)
-                if value is not None and metric in million_scale_metrics:
-                    value = value / 1_000_000
+                
                 data_cell = ws.cell(row=metric_row, column=col, value=value)
-                data_cell.font = data_tnr_font
-
-            # Apply common formatting to all cells, whether formula or value
+                data_cell.font = data_tnr_italic_font if year in new_years else data_tnr_font
+            
+            # Apply common formatting to all cells
             data_cell.fill = data_fill
             data_cell.border = thin_border
-            data_cell.number_format = number_formats[metric]
-
+            
+            # Apply number format if defined
+            if metric in number_formats:
+                data_cell.number_format = number_formats[metric]
+            
+            # Apply right alignment for all data cells
+            data_cell.alignment = right_alignment
+            
 def write_analyses_sheet(writer, final_output):
     reported_currency = final_output["summary"]["reported_currency"]
     analyses = final_output["analyses"]
