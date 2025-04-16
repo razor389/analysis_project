@@ -307,8 +307,16 @@ def write_company_description(writer, final_output):
 
             # Determine if we should use formulas based on the metric
             use_formula = True
+
+            if metric == "net_profit":
+                if year in new_years:
+                    # Only use the formula for net_profit in new (future) years
+                    formula = f"={col_letter}{metric_positions['operating_eps']}*{col_letter}{metric_positions['shares_outstanding']}"
+                else:
+                    # For historical years, use the raw data
+                    use_formula = False
             
-            if metric == "pe_ratio":
+            elif metric == "pe_ratio":
                 formula = f"=(({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2)/{col_letter}{metric_positions['operating_eps']}"
             
             elif metric == "buyback" and i > 0:  # Skip first year as we need a previous year to compare
@@ -362,7 +370,7 @@ def write_company_description(writer, final_output):
             
             # Apply right alignment for all data cells
             data_cell.alignment = right_alignment
-            
+
 def write_analyses_sheet(writer, final_output):
     reported_currency = final_output["summary"]["reported_currency"]
     analyses = final_output["analyses"]
@@ -538,16 +546,11 @@ def write_analyses_sheet(writer, final_output):
             col = start_col + i
             col_letter = get_column_letter(col)
             
-            if year in new_years:
-                if metric == "sales_per_share":
-                    # revenue this year / shares outstanding from Co. Desc sheet
-                    formula = f"={col_letter}{metric_rows_1['revenues']}/('Co. Desc'!{col_letter}16)"
-                    cell = ws.cell(row=row_num, column=col, value=formula)
-                else:
-                    val = data.get(year, {}).get(metric)
-                    if val is not None and metric in million_scale_metrics:
-                        val = val / 1_000_000
-                    cell = ws.cell(row=row_num, column=col, value=val)
+            if metric == "sales_per_share":
+                # revenue this year / shares outstanding from Co. Desc sheet
+                formula = f"={col_letter}{metric_rows_1['revenues']}/('Co. Desc'!{col_letter}16)"
+                cell = ws.cell(row=row_num, column=col, value=formula)
+                
             else:
                 val = data.get(year, {}).get(metric)
                 if val is not None and metric in million_scale_metrics:
