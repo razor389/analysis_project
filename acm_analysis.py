@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from gen_excel import generate_excel_for_ticker_year
 from outlook_ticker_search import filter_emails_by_config
 from industry_comp import get_industry_peers_with_stats
-from utils import get_company_profile, get_current_market_cap_yahoo, get_current_quote_yahoo, get_reported_currency, get_yahoo_ticker, get_yearly_high_low_yahoo
+from utils import get_company_profile, get_current_market_cap_yahoo, get_eoy_fx_rate, get_current_quote_yahoo, get_reported_currency, get_yahoo_ticker, get_yearly_high_low_yahoo
 from financial_data_preprocessor import process_financial_statements
 
 # Load the .env file
@@ -246,7 +246,7 @@ def extract_series_values_by_year(basic_data: dict, key: str) -> dict:
 
     return result
 
-def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile: dict):
+def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile: dict, reported_currency: str):
     # Load the three financial statements
     bs_data = load_json(f"{symbol}_bs_annual.json")
     ic_data = load_json(f"{symbol}_ic_annual.json")
@@ -282,7 +282,13 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
     results = {}
     prev_shares_outstanding = None  # For buyback calculation
     yahoo_symbol = get_yahoo_ticker(profile)
-
+    need_fx_convert = (
+       profile.get("isAdr")
+       and yahoo_symbol == profile.get("symbol")
+       and reported_currency
+       and reported_currency != "USD"
+    )
+    fx_cache = {}
     for year in years:
         bs = bs_by_year.get(year, {})
         ic = ic_by_year.get(year, {})
@@ -341,6 +347,18 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         # Yearly high/low prices
         
         yearly_high, yearly_low = get_yearly_high_low_yahoo(yahoo_symbol, year)
+        # — convert to reporting_currency if needed
+        if (need_fx_convert
+            and yearly_high is not None
+            and yearly_low is not None):
+            fx = fx_cache.get(year)
+            if fx is None:
+                fx = get_eoy_fx_rate(reported_currency, "USD", year)
+                fx_cache[year] = fx
+            if fx:
+                yearly_high = yearly_high / fx
+                yearly_low  = yearly_low  / fx
+                
         average_price = None
         if yearly_high is not None and yearly_low is not None:
             average_price = (yearly_high + yearly_low) / 2
@@ -1310,7 +1328,7 @@ if __name__ == "__main__":
 
     # Extract YOY data
     yoy_data = extract_yoy_data(symbol, years_to_extract, 
-                                segmentation_data, profile)
+                                segmentation_data, profile, reported_currency)
 
     # Compute Investment Characteristics
     investment_characteristics = compute_investment_characteristics(yoy_data)
@@ -1335,6 +1353,20 @@ if __name__ == "__main__":
     yahoo_symbol = get_yahoo_ticker(profile)
     current_stock_price = get_current_quote_yahoo(yahoo_symbol)
     market_cap = get_current_market_cap_yahoo(yahoo_symbol)
+
+    if (profile.get("isAdr")
+       and yahoo_symbol == profile.get("symbol")
+       and reported_currency
+       and reported_currency != "USD"):
+       fx = get_eoy_fx_rate(reported_currency, "USD", end_year)
+       if fx:
+           # Yahoo gives USD per unit of reported_currency, so
+           #  1 USD = (1/fx) reported_currency units
+           current_stock_price = current_stock_price / fx
+           market_cap           = market_cap / fx
+           print(f"→ Converted ADR price into {reported_currency} @ EOY {end_year} FX={fx}")
+       else:
+           print(f"⚠️ Could not fetch {reported_currency}/USD EOY rate for {end_year}")
 
     # Create final output structure with a "header"
     final_output = {

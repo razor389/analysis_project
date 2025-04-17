@@ -2,6 +2,7 @@ import json
 import requests
 import yfinance as yf
 from dotenv import load_dotenv
+import datetime
 import os
 import sys
 
@@ -172,3 +173,30 @@ def get_long_term_rate():
     except Exception as e:
         print("Error fetching long-term rates:", e)
         return None
+    
+def get_eoy_fx_rate(reporting_currency: str,
+                    base_currency: str,
+                    year: int) -> float:
+    """
+    Fetch the FX close on the last trading day of December `year`
+    for the pair REPORTING/BASE (e.g. EUR/USD) by using yfinance.
+    Returns the 'Close' price for the latest available date in Dec.
+    """
+    # Yahoo ticker for FX pair is e.g. "EURUSD=X"
+    pair = f"{reporting_currency}{base_currency}=X"
+    try:
+        ticker = yf.Ticker(pair)
+        # try just December data
+        start = f"{year}-12-01"
+        end   = f"{year}-12-31"
+        df = ticker.history(start=start, end=end, auto_adjust=False)
+        if not df.empty:
+            # last available close in December
+            return df['Close'].iloc[-1]
+        # fallback: grab 1-year history and take last
+        df = ticker.history(period="1y", auto_adjust=False)
+        if not df.empty:
+            return df['Close'].iloc[-1]
+    except Exception as e:
+        print(f"Error fetching EOY FX rate {reporting_currency}/{base_currency} {year}: {e}")
+    return None
