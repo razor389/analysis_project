@@ -1480,13 +1480,13 @@ def write_qualities_sheet(writer, final_output):
 def write_industry_sheet(writer, final_output):
     """
     Write the Industry sheet with operating and market statistics.
-    For the first company's Operating Margin, references the most recent year's value in the Analyses sheet.
+    For the first company, use formulas to reference data from other sheets instead of static values.
     
     Parameters:
     writer: ExcelWriter object
     final_output: Dictionary containing the full output data including industry statistics
     """
-    # Early return if qualities is None/null
+    # Early return if industry is None/null
     if not final_output.get("industry"):
         return
     
@@ -1536,7 +1536,7 @@ def write_industry_sheet(writer, final_output):
         cell.border = thin_border
         cell.alignment = center_alignment
 
-    # Get the most recent year from the Analyses sheet for operating margin reference
+    # Get the most recent historical year from the Analyses sheet for referencing (not forecast years)
     most_recent_year_col = None
     if "Analyses" in wb.sheetnames:
         analyses_ws = wb["Analyses"]
@@ -1544,12 +1544,25 @@ def write_industry_sheet(writer, final_output):
         # Find the last year column in the Analyses sheet
         # Years are in row 9, starting from column B (2)
         col = 2
+        sorted_years = []
+        
+        # Collect all years and their columns
         while True:
             year_cell = analyses_ws.cell(row=9, column=col)
             if year_cell.value is None or col > analyses_ws.max_column:
                 break
-            most_recent_year_col = col
+            
+            # Check if this is a historical year or forecast year
+            # For historical years, the revenue data (row 10) should be non-empty
+            revenue_cell = analyses_ws.cell(row=10, column=col)
+            if revenue_cell.value is not None:
+                sorted_years.append((col, year_cell.value))
+            
             col += 1
+        
+        # Use the last historical year (not forecast)
+        if sorted_years:
+            most_recent_year_col = sorted_years[-1][0]
     
     # Write company data
     for idx, company in enumerate(companies):
@@ -1560,40 +1573,46 @@ def write_industry_sheet(writer, final_output):
         company_cell.alignment = center_alignment
         company_data = industry_data["operatingStatistics"][company]
         
-        # Write operating statistics
-        col_mappings = {
-            "Debt(yrs.)": (4, "Debt(yrs.)"),
-            "Sales": (6, "Sales"),
-            "ROC": (8, "ROC"),
-            "Operating Margin": (10, "Operating Margin")
-        }
-
-        for label, (col, key) in col_mappings.items():
-            # Special handling for first company's debt years and operating margin
-            if idx == 0:
-                if label == "Debt(yrs.)":
-                    cell = ws.cell(row=row, column=col, value="='Studies'!D42")
-                elif label == "Operating Margin" and most_recent_year_col is not None:
-                    # Reference the most recent year's operating margin in Analyses sheet
-                    cell = ws.cell(row=row, column=col, value=f"='Analyses'!{get_column_letter(most_recent_year_col-2)}20")
-                else:
-                    value = company_data[key]
+        # Special handling for first company - use formulas instead of static values
+        if idx == 0:
+            # Debt(yrs.) - Reference the Studies sheet
+            debt_cell = ws.cell(row=row, column=4, value="='Studies'!D42")
+            debt_cell.font = data_arial_font
+            debt_cell.alignment = center_alignment
+            debt_cell.number_format = '#,##0.0'
+            
+            # Sales - Reference the latest sales from Analyses sheet
+            sales_cell = ws.cell(row=row, column=6, value=f"='Analyses'!{get_column_letter(most_recent_year_col)}10")
+            sales_cell.font = data_arial_font
+            sales_cell.alignment = center_alignment
+            sales_cell.number_format = '#,##0'
+            
+            # ROC - Reference the latest ROC from Co. Desc sheet
+            roc_cell = ws.cell(row=row, column=8, value=f"='Co. Desc'!{get_column_letter(most_recent_year_col)}25")
+            roc_cell.font = data_arial_font
+            roc_cell.alignment = center_alignment
+            roc_cell.number_format = '0.0%'
+            
+            # Operating Margin - Reference the latest operating margin from Analyses sheet
+            op_margin_cell = ws.cell(row=row, column=10, value=f"='Analyses'!{get_column_letter(most_recent_year_col)}20")
+            op_margin_cell.font = data_arial_font
+            op_margin_cell.alignment = center_alignment
+            op_margin_cell.number_format = '0.0%'
+        else:
+            # For other companies, use the static values from industry data
+            for label, (col, format_str) in op_stats_columns.items():
+                if label != "Company":  # Skip company name, already written
+                    value = company_data[label]
                     cell = ws.cell(row=row, column=col, value=value)
                     
-                    # Convert Sales to millions
-                    if key == "Sales":
+                    # Convert Sales to millions if needed
+                    if label == "Sales":
                         cell.value = value / 1_000_000
-            else:
-                value = company_data[key]
-                cell = ws.cell(row=row, column=col, value=value)
-                
-                # Convert Sales to millions
-                if key == "Sales":
-                    cell.value = value / 1_000_000
-            
-            cell.font = data_arial_font
-            cell.alignment = center_alignment
-            cell.number_format = op_stats_columns[label][1]
+                    
+                    cell.font = data_arial_font
+                    cell.alignment = center_alignment
+                    if format_str:
+                        cell.number_format = format_str
 
     last_op_stats_row = row
 
@@ -1622,34 +1641,103 @@ def write_industry_sheet(writer, final_output):
         cell.border = thin_border
         cell.alignment = center_alignment
 
+    # Get the most recent historical year and one forecast year for the current metrics
+    most_recent_actual_col = None
+    forecast_year_col = None
+    if "Co. Desc" in wb.sheetnames:
+        co_desc_ws = wb["Co. Desc"]
+        
+        # Find the columns in the Co. Desc sheet
+        # Years are in row 3, starting from column B (2)
+        sorted_years = []
+        historical_years = []
+        col = 2
+        
+        while True:
+            year_cell = co_desc_ws.cell(row=3, column=col)
+            if year_cell.value is None or col > co_desc_ws.max_column:
+                break
+                
+            # Check if this is a historical year or forecast year
+            # For historical years, the price data (row 9) should be non-empty
+            price_cell = co_desc_ws.cell(row=9, column=col)
+            
+            if price_cell.value is not None:
+                historical_years.append((col, year_cell.value))
+            else:
+                # This is a forecast year
+                if forecast_year_col is None:
+                    forecast_year_col = col
+                    
+            sorted_years.append((col, year_cell.value))
+            col += 1
+        
+        # Get the last historical year
+        if historical_years:
+            most_recent_actual_col = historical_years[-1][0]  # Last historical year column
+
     # Write market statistics data
-    for company in companies:
+    for idx, company in enumerate(companies):
         row += 1
         # Write company name
         company_cell = ws.cell(row=row, column=2, value=company)
         company_cell.font = data_arial_font
         company_cell.alignment = center_alignment
-        company_data = industry_data["marketStatistics"][company]
         
-        # Write market statistics
-        col_mappings = {
-            "P/B": (4, "P/B"),
-            "P/E": (6, "P/E"),
-            "Div. Yld.": (8, "Div. Yld."),
-            "EV/Sales": (10, "EV/Sales")
-        }
-
-        for label, (col, key) in col_mappings.items():
-            value = company_data[key]
-            cell = ws.cell(row=row, column=col, value=value)
-            cell.font = data_arial_font
-            cell.alignment = center_alignment
-            cell.number_format = market_stats_columns[label][1]
+        # Special handling for first company - use formulas instead of static values
+        if idx == 0 and most_recent_actual_col is not None:
+            # P/B - Calculate using price from Co. Desc G2 divided by book value per share
+            # P/B = price / book value per share
+            price = "'Co. Desc'!G2"  # Price from cell G2
+            book_value = f"'Co. Desc'!{get_column_letter(most_recent_actual_col)}20"
+            
+            pb_formula = f"={price}/{book_value}"
+            pb_cell = ws.cell(row=row, column=4, value=pb_formula)
+            pb_cell.font = data_arial_font
+            pb_cell.alignment = center_alignment
+            pb_cell.number_format = '#,##0.00'
+            
+            # P/E - Reference P/E ratio from Co. Desc sheet directly
+            pe_formula = f"='Co. Desc'!{get_column_letter(most_recent_actual_col)}8"
+            pe_cell = ws.cell(row=row, column=6, value=pe_formula)
+            pe_cell.font = data_arial_font
+            pe_cell.alignment = center_alignment
+            pe_cell.number_format = '#,##0.0'
+            
+            # Div. Yld. - Reference Avg Div Yield from Co. Desc sheet directly
+            div_formula = f"='Co. Desc'!{get_column_letter(most_recent_actual_col)}14"
+            div_cell = ws.cell(row=row, column=8, value=div_formula)
+            div_cell.font = data_arial_font
+            div_cell.alignment = center_alignment
+            div_cell.number_format = '0.00%'
+            
+            # EV/Sales - Calculate using market cap from cell I2, long term debt from Studies D39, and sales from Analyses
+            # EV/Sales = (Market Cap + Long Term Debt) / Sales
+            market_cap = "'Co. Desc'!I2"  # Market Cap directly from I2
+            lt_debt_formula = "'Studies'!D39"  # Long Term Debt from Studies sheet
+            sales_formula = f"'Analyses'!{get_column_letter(most_recent_year_col)}10"  # Sales from Analyses
+            
+            ev_sales_formula = f"=({market_cap}+{lt_debt_formula})/{sales_formula}"
+            ev_sales_cell = ws.cell(row=row, column=10, value=ev_sales_formula)
+            ev_sales_cell.font = data_arial_font
+            ev_sales_cell.alignment = center_alignment
+            ev_sales_cell.number_format = '#,##0.00'
+        else:
+            # For other companies, use the static values from industry data
+            company_data = industry_data["marketStatistics"][company]
+            for label, (col, format_str) in market_stats_columns.items():
+                if label != "Company":  # Skip company name, already written
+                    value = company_data[label]
+                    cell = ws.cell(row=row, column=col, value=value)
+                    cell.font = data_arial_font
+                    cell.alignment = center_alignment
+                    if format_str:
+                        cell.number_format = format_str
 
     # Adjust column widths
     for col in range(1, 11):
         ws.column_dimensions[get_column_letter(col)].width = 15
-
+        
 def write_hist_pricing_sheet(writer, final_output):
     """
     Write the Historical Pricing sheet with average ratios and price implications in a 2x2 grid layout
