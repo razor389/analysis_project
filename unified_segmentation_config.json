@@ -263,6 +263,38 @@
     },
     "LVMUY": {
         "manual_data": {
+            "2024":{
+                "revenue":{
+                    "Wines & Spirits": 5862000000,
+                    "Fashion & Leather Goods": 41060000000,
+                    "Perfumes & Cosmetics": 8418000000,
+                    "Watches & Jewelry": 10577000000,
+                    "Selective Retailing": 18262000000
+                },
+                "operating_income":{
+                    "Wines & Spirits": 1356000000,
+                    "Fashion & Leather Goods": 15230000000,
+                    "Perfumes & Cosmetics": 671000000,
+                    "Watches & Jewelry": 1546000000,
+                    "Selective Retailing": 1385000000
+                }
+            },
+            "2023":{
+                "revenue":{
+                    "Wines & Spirits": 6602000000,
+                    "Fashion & Leather Goods": 42169000000,
+                    "Perfumes & Cosmetics": 8271000000,
+                    "Watches & Jewelry": 10902000000,
+                    "Selective Retailing": 17885000000
+                },
+                "operating_income":{
+                    "Wines & Spirits": 2019000000,
+                    "Fashion & Leather Goods": 16836000000,
+                    "Perfumes & Cosmetics": 713000000,
+                    "Watches & Jewelry": 2162000000,
+                    "Selective Retailing": 1391000000
+                }
+            },
             "2022": {
                 "revenue": {
                     "Wines & Spirits": 7099000000,

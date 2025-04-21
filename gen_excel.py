@@ -308,13 +308,26 @@ def write_company_description(writer, final_output):
             # Determine if we should use formulas based on the metric
             use_formula = True
 
-            if metric == "net_profit":
+            # MODIFIED FORMULA GENERATION SECTION
+            if metric == "operating_eps":
                 if year in new_years:
-                    # Only use the formula for net_profit in new (future) years
-                    formula = f"={col_letter}{metric_positions['operating_eps']}*{col_letter}{metric_positions['shares_outstanding']}"
+                    # For new years, calculate operating_eps from net_profit / shares_outstanding
+                    formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['shares_outstanding']}"
                 else:
                     # For historical years, use the raw data
                     use_formula = False
+                    
+            elif metric == "diluted_eps":
+                if year in new_years:
+                    # For new years, make diluted_eps equal to operating_eps
+                    formula = f"={col_letter}{metric_positions['operating_eps']}"
+                else:
+                    # For historical years, use the raw data
+                    use_formula = False
+            
+            elif metric == "net_profit":
+                # Always use raw data for net_profit to avoid circular references
+                use_formula = False
             
             elif metric == "pe_ratio":
                 formula = f"=(({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2)/{col_letter}{metric_positions['operating_eps']}"
@@ -422,8 +435,10 @@ def write_analyses_sheet(writer, final_output):
 
     growth_rate_rev = inv_char["sales_analysis"].get("growth_rate_percent_revenues")
     growth_rate_sps = inv_char["sales_analysis"].get("growth_rate_percent_sales_per_share")
-    growth_rate_rev_5y = inv_char["sales_analysis_last_5_years"].get("growth_rate_percent_revenues")
-    growth_rate_sps_5y = inv_char["sales_analysis_last_5_years"].get("growth_rate_percent_sales_per_share")
+    
+    # We'll replace these with formulas
+    # growth_rate_rev_5y = inv_char["sales_analysis_last_5_years"].get("growth_rate_percent_revenues")
+    # growth_rate_sps_5y = inv_char["sales_analysis_last_5_years"].get("growth_rate_percent_sales_per_share")
 
     # Get sorted years for Co. Desc references
     sorted_years = sorted(data.keys(), key=lambda x: int(x))
@@ -445,6 +460,13 @@ def write_analyses_sheet(writer, final_output):
     # Calculate the number of years for CAGR formula
     years_span = len(sorted_years) - 1 if len(sorted_years) > 1 else 1
 
+    # Determine columns for 5-year growth rate calculation
+    # If we have more than 5 historical years, use the last 5
+    # Otherwise, use all available historical years
+    last_5y_count = min(5, len(sorted_years))
+    first_5y_col = last_year_col - last_5y_count + 1
+    first_5y_letter = get_column_letter(first_5y_col)
+    
     # Write data cells with formulas for specified metrics
     data_cells = {
         # Formula for Growth Rate % (Operating EPS): CAGR of operating_eps from Co. Desc
@@ -464,8 +486,13 @@ def write_analyses_sheet(writer, final_output):
         # Keep original values for these metrics
         (15, 6): growth_rate_rev,
         (17, 6): growth_rate_sps,
-        (15, 11): growth_rate_rev_5y,
-        (17, 11): growth_rate_sps_5y
+        
+        # MODIFIED: Use RATE function for 5-year growth calculations
+        # For revenues (cell 15,11)
+        (15, 11): f"=RATE(COUNT({first_5y_letter}10:{last_year_letter}10),,{first_5y_letter}10*-1,{last_year_letter}10)",
+        
+        # For sales per share (cell 17,11)
+        (17, 11): f"=RATE(COUNT({first_5y_letter}11:{last_year_letter}11),,{first_5y_letter}11*-1,{last_year_letter}11)"
     }
 
     # Write the investment characteristics data (data cells)
@@ -556,6 +583,38 @@ def write_analyses_sheet(writer, final_output):
                 if val is not None and metric in million_scale_metrics:
                     val = val / 1_000_000
                 cell = ws.cell(row=row_num, column=col, value=val)
+            
+            cell.fill = data_fill
+            cell.font = data_tnr_italic_font if year in new_years else data_tnr_font
+            cell.border = thin_border
+            cell.number_format = number_formats[metric]
+
+    # Write second set of metrics (data cells)
+    for metric, row_num in metric_rows_2.items():
+        for i, year in enumerate(all_years):
+            col = start_col + i
+            col_letter = get_column_letter(col)
+            
+            if year in new_years:
+                if metric == "depreciation_percent":
+                    # MODIFIED: depreciation this year / net profit from Co. Desc sheet
+                    formula = f"={col_letter}{metric_rows_2['depreciation']}/('Co. Desc'!{col_letter}4)"
+                    cell = ws.cell(row=row_num, column=col, value=formula)
+                else:
+                    val = data.get(year, {}).get(metric)
+                    if val is not None and metric in million_scale_metrics:
+                        val = val / 1_000_000
+                    cell = ws.cell(row=row_num, column=col, value=val)
+            else:
+                if metric == "depreciation_percent":
+                    # MODIFIED: Ensure depreciation_percent uses formula for historical years too
+                    formula = f"={col_letter}{metric_rows_2['depreciation']}/('Co. Desc'!{col_letter}4)"
+                    cell = ws.cell(row=row_num, column=col, value=formula)
+                else:
+                    val = data.get(year, {}).get(metric)
+                    if val is not None and metric in million_scale_metrics:
+                        val = val / 1_000_000
+                    cell = ws.cell(row=row_num, column=col, value=val)
             
             cell.fill = data_fill
             cell.font = data_tnr_italic_font if year in new_years else data_tnr_font
@@ -859,6 +918,16 @@ def write_profit_desc_sheet(writer, final_output, no_add_da=False):
                 cell.font = Font(name="Arial", italic=True)
                 cell.border = thin_border
                 cell.number_format = '#,##0'
+            
+            elif metric == "dividend_paid":
+                # MODIFIED: Reference the dividends_paid from Co. Desc sheet
+                formula = f"='Co. Desc'!{co_desc_col_letter}12"
+                
+                cell = ws.cell(row=metric_row, column=year_col, value=formula)
+                cell.fill = data_fill
+                cell.font = Font(name="Arial", italic=True)
+                cell.border = thin_border
+                cell.number_format = '#,##0'
                 
             elif metric == "share_buybacks_from_stmt_cf":
                 # Reference the buyback line in Co. Desc sheet
@@ -1045,12 +1114,24 @@ def write_profit_desc_sheet(writer, final_output, no_add_da=False):
                 percent_cell.number_format = '0.0%'
 
         # Calculate percentages for operating earnings breakdowns
+        # Match with corresponding revenue breakdown when possible
         for bkey in all_operating_earnings_breakdowns:
             br_key = ("operating_earnings", bkey)
+            rev_key = ("revenues", bkey)
+            
             if br_key in breakdown_rows:
                 brow = breakdown_rows[br_key]
                 metric_cell_ref = f"{get_column_letter(year_col)}{brow}"
-                percent_formula = f"=IF({metric_cell_ref}<>0,{metric_cell_ref}/{rev_cell_ref},\"\")"
+                
+                # Check if there's a matching revenue breakdown
+                if rev_key in breakdown_rows:
+                    # Use the corresponding revenue breakdown value
+                    rev_brow = breakdown_rows[rev_key]
+                    rev_breakdown_cell_ref = f"{get_column_letter(year_col)}{rev_brow}"
+                    percent_formula = f"=IF(AND({metric_cell_ref}<>0,{rev_breakdown_cell_ref}<>0),{metric_cell_ref}/{rev_breakdown_cell_ref},\"\")"
+                else:
+                    # Fall back to total revenue if no matching breakdown exists
+                    percent_formula = f"=IF({metric_cell_ref}<>0,{metric_cell_ref}/{rev_cell_ref},\"\")"
                 
                 percent_cell = ws.cell(row=brow, column=year_col + 1, value=percent_formula)
                 percent_cell.font = Font(name="Arial", italic=True, size=8)
