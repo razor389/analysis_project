@@ -318,12 +318,8 @@ def write_company_description(writer, final_output):
                     use_formula = False
                     
             elif metric == "diluted_eps":
-                if year in new_years:
-                    # For new years, make diluted_eps equal to operating_eps
-                    formula = f"={col_letter}{metric_positions['operating_eps']}"
-                else:
-                    # For historical years, use the raw data
-                    use_formula = False
+                # Always calculate diluted_eps for all years
+                formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['shares_outstanding']}"
             
             elif metric == "net_profit":
                 # Always use raw data for net_profit to avoid circular references
