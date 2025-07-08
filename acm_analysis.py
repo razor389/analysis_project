@@ -401,10 +401,17 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         pe_low = yearly_low / diluted_eps if yearly_low is not None and diluted_eps !=0 else None
         pe_high = yearly_high / diluted_eps if yearly_high is not None and diluted_eps != 0  else None
 
-        # p/b low high
-        pb_low = yearly_low / book_value_per_share if yearly_low is not None and book_value_per_share != 0 else None
-        pb_high = yearly_high / book_value_per_share if yearly_high is not None and book_value_per_share != 0 else None
+        # P/B low/high (fixed guard against None):
+        if yearly_low is not None and book_value_per_share not in (None, 0):
+            pb_low = yearly_low / book_value_per_share
+        else:
+            pb_low = None
 
+        if yearly_high is not None and book_value_per_share not in (None, 0):
+            pb_high = yearly_high / book_value_per_share
+        else:
+            pb_high = None
+            
         # p/s low high
         ps_low = yearly_low / sales_per_share if yearly_low is not None and sales_per_share !=0 else None
         ps_high = yearly_high / sales_per_share if yearly_high is not None and sales_per_share != 0 else None
