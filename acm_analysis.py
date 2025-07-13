@@ -1399,6 +1399,9 @@ if __name__ == "__main__":
     final_output["qualities"] = qualities
 
     rearranged_output = transform_final_output(final_output, stock_price=current_stock_price)
+    # Manually ensure the 'qualities' key from the original dict is in the final rearranged output
+    rearranged_output['qualities'] = final_output.get('qualities', '')
+
     # rearranged_output = finalize_output(rearranged_output)  # apply normalization
 
     # Save the consolidated YOY data with header
