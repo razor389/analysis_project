@@ -3,6 +3,7 @@
 import os
 import json
 import asyncio
+import re
 from datetime import datetime
 from typing import List, Dict, Any
 import google.generativeai as genai
@@ -50,9 +51,9 @@ Requirements:
         "max_output_tokens": 2000,
     }
 
-    # Initialize the Gemini model
+    # Initialize the Gemini model with the more powerful Gemini 1.5 Pro
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
+        model_name="gemini-1.5-pro",
         generation_config=generation_config,
         system_instruction=system_prompt
     )
@@ -60,12 +61,9 @@ Requirements:
     try:
         # Generate the content asynchronously
         response = await model.generate_content_async([user_prompt])
-        
-        # Extract the text and clean it up
         summary_text = response.text.strip()
         
         # In case the model adds an introductory phrase, find the start of the list
-        import re
         match = re.search(r'1\.\s+\*\*', summary_text)
         if match:
             summary_text = summary_text[match.start():]
@@ -73,7 +71,6 @@ Requirements:
         return summary_text
     except Exception as e:
         print(f"Error during Gemini API call: {str(e)}")
-        # Raise the exception to be caught by the calling function
         raise
 
 def generate_post_summary(posts: list, ticker: str) -> str:
@@ -85,48 +82,67 @@ def generate_post_summary(posts: list, ticker: str) -> str:
         return "No posts were provided to summarize."
         
     try:
-        # Run the asynchronous summary generation function
         return asyncio.run(_generate_post_summary_async(posts, ticker))
     except Exception as e:
         print(f"An error occurred while generating the summary: {str(e)}")
         return "Error: Summary could not be generated."
 
-if __name__ == '__main__':
-    # This part is for standalone testing of the summarizer
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Generate summaries of ticker-related posts and emails using Gemini.')
-    parser.add_argument('ticker', type=str, help='The stock ticker symbol (e.g., AAPL).')
-    
-    args = parser.parse_args()
-    ticker = args.ticker.upper()
-    
-    # Define filenames for input
+def process_ticker_posts(ticker: str, debug: bool = False):
+    """
+    Process posts and emails for a given ticker and generate a summary.
+    """
+    # Define filenames
     posts_filename = os.path.join("output", f"{ticker}_posts.json")
     emails_filename = os.path.join("output", f"{ticker}_sent_emails.json")
+    combined_filename = os.path.join("output", f"{ticker}_combined_debug.json")
     
-    combined_data = []
-    # Load posts if available
-    if os.path.exists(posts_filename):
-        with open(posts_filename, "r", encoding="utf-8") as f:
-            combined_data.extend(json.load(f))
+    try:
+        combined_data = []
 
-    # Load emails if available
-    if os.path.exists(emails_filename):
-        with open(emails_filename, "r", encoding="utf-8") as f:
-            combined_data.extend(json.load(f))
+        # Load posts if the file exists
+        if os.path.exists(posts_filename):
+            with open(posts_filename, "r", encoding="utf-8") as f:
+                combined_data.extend(json.load(f))
+
+        # Load emails if the file exists
+        if os.path.exists(emails_filename):
+            with open(emails_filename, "r", encoding="utf-8") as f:
+                combined_data.extend(json.load(f))
+
+        # Optionally write combined data to a debug file
+        if debug:
+            sorted_posts = sorted(combined_data, key=lambda x: x['timestamp'], reverse=True)
+            with open(combined_filename, "w", encoding="utf-8") as f:
+                json.dump(sorted_posts, f, indent=4)
+            print(f"Combined data written to {combined_filename} for debugging.")
+
+        if combined_data:
+            print(f"Attempting to generate post summaries for {ticker}")
+            sorted_posts = sorted(combined_data, key=lambda x: x['timestamp'], reverse=True)
+            summary = generate_post_summary(sorted_posts, ticker)
             
-    if combined_data:
-        print(f"Generating summary for {ticker}...")
-        summary = generate_post_summary(combined_data, ticker)
-        
-        # Save the summary to an output file
-        output_filename = os.path.join("output", f"{ticker}_gemini_summary.txt")
-        with open(output_filename, "w", encoding="utf-8") as f:
-            f.write(summary)
+            # Write summary to output file
+            output_filename = os.path.join("output", f"{ticker}_post_summary.txt")
+            with open(output_filename, "w", encoding="utf-8") as f:
+                f.write(summary)
             
-        print(f"Summary saved successfully to {output_filename}")
-        print("\n--- Summary ---")
-        print(summary)
-    else:
-        print(f"No data found for ticker {ticker}. Could not generate summary.")
+            print(f"Summary has been saved to {output_filename}")
+            return summary
+        else:
+            print(f"No posts or emails found for {ticker}. Skipping summary.")
+            return "No forum summary available."
+            
+    except Exception as e:
+        print(f"Error processing data for {ticker}: {e}")
+        return "Error generating summary."
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Generate weighted summaries of ticker posts and emails using Gemini.')
+    parser.add_argument('ticker', type=str, help='Stock ticker symbol (e.g., AAPL)')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode to write combined data to file')
+    
+    args = parser.parse_args()
+    
+    process_ticker_posts(args.ticker.upper(), args.debug)
