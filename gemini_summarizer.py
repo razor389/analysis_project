@@ -48,7 +48,7 @@ Requirements:
     response = await model.generate_content_async([user_prompt])
     print("[GEMINI] ==> Response received.")
     
-    summary_text = response.text.strip()
+    summary_text = str(response.text.strip())
     match = re.search(r'1\.\s+\*\*', summary_text)
 
     if match:
