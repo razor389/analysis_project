@@ -1488,37 +1488,37 @@ def write_qualities_sheet(writer, final_output):
     """
     if not final_output.get("qualities"):
         return
-    
+        
     wb = writer.book
-
+    
     # Create sheet if it doesn't exist
     if "Qualities" not in wb.sheetnames:
         wb.create_sheet("Qualities")
     ws = wb["Qualities"]
-
+    
     # Get the qualities text
     text = final_output.get("qualities", "No summary available.")
-
+    
     # Set title
     ws["A1"] = "Core Analysis"
     ws["A1"].font = Font(name="Times New Roman", size=14, bold=True)
     ws["A1"].fill = label_fill
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
     ws["A1"].border = thin_border
-
-    # Split into individual quality entries (split on numbered items)
-    qualities = re.split(r'\n(?=\d+\.\s)', text.strip())
     
+    # Split into individual quality entries (split on numbered items)
+    qualities = re.split(r'\n\n(?=\d+\.\s)', text.strip())
+        
     current_row = 3
     col = 1
-
+    
     for quality in qualities:
         if not quality.strip():
             continue
             
         # Extract the number, header, and description
-        # Pattern matches: number, bold header, and description
-        match = re.match(r'(\d+)\.\s*\*\*(.*?)\*\*:(.+)', quality.strip(), re.DOTALL)
+        # Updated pattern: number, bold header (no colon), then description
+        match = re.match(r'(\d+)\.\s*\*\*(.*?)\*\*\s*(.+)', quality.strip(), re.DOTALL)
         
         if match:
             number, header, description = match.groups()
@@ -1541,17 +1541,11 @@ def write_qualities_sheet(writer, final_output):
             
             # Add a blank line between qualities
             current_row += 1
-
+    
     # Set column width
     ws.column_dimensions[get_column_letter(col)].width = 110
-
+    
     # Remove gridlines
-    ws.sheet_view.showGridLines = False
-
-    # Optionally set column width so text fits nicely
-    ws.column_dimensions[get_column_letter(col)].width = 110
-
-    # Remove gridlines on this sheet if you prefer
     ws.sheet_view.showGridLines = False
 
 def write_industry_sheet(writer, final_output):
