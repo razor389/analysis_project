@@ -20,7 +20,7 @@ async def _generate_post_summary_async_with_retry(posts: List[Dict[str, Any]], t
     sorted_posts = sorted(posts, key=lambda x: x['timestamp'], reverse=True)
     
     # Limit the number of posts to prevent overwhelming the API
-    max_posts = 50  # Reduced from potentially unlimited posts
+    max_posts = 70  # Reduced from potentially unlimited posts
     if len(sorted_posts) > max_posts:
         print(f"Limiting analysis to {max_posts} most recent posts (from {len(sorted_posts)} total)")
         sorted_posts = sorted_posts[:max_posts]
