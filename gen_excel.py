@@ -1507,7 +1507,7 @@ def write_qualities_sheet(writer, final_output):
     ws["A1"].border = thin_border
 
     # Split into individual quality entries (split on numbered items)
-    qualities = re.split(r'\n\n(?=\d+\.)', text.strip())
+    qualities = re.split(r'\n(?=\d+\.\s)', text.strip())
     
     current_row = 3
     col = 1
