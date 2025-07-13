@@ -6,7 +6,7 @@ import os
 import sys
 import requests
 import datetime
-from anthropic_summarizer import generate_post_summary
+from gemini_summarizer import generate_post_summary
 from forum_posts import fetch_all_for_ticker
 from dotenv import load_dotenv
 from gen_excel import generate_excel_for_ticker_year
