@@ -9,63 +9,28 @@ from typing import List, Dict, Any
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-# --- Start of Diagnostic Version ---
+# Load environment variables from .env file
+load_dotenv()
 
-def run_gemini_summarizer(posts: List[Dict[str, Any]], ticker: str) -> str:
-    """
-    Diagnostic wrapper for the async Gemini summarizer.
-    """
-    print("[GEMINI_DIAGNOSTIC] ==> Entering summarizer.")
-    
-    # 1. Check for API Key
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_api_key:
-        print("[GEMINI_DIAGNOSTIC] ==> ERROR: GEMINI_API_KEY is not set in the .env file.")
-        return "Error: GEMINI_API_KEY not found."
-    
-    # Mask key for printing
-    masked_key = f"{gemini_api_key[:4]}...{gemini_api_key[-4:]}"
-    print(f"[GEMINI_DIAGNOSTIC] ==> API key loaded successfully: {masked_key}")
+# Configure the Gemini API client
+gemini_api_key = os.getenv("GEMINI_API_KEY")
+if not gemini_api_key:
+    raise ValueError("GEMINI_API_KEY not found in environment. Please set it in your .env file.")
+genai.configure(api_key=gemini_api_key)
 
-    try:
-        # 2. Configure the library
-        print("[GEMINI_DIAGNOSTIC] ==> Configuring the google.generativeai library.")
-        genai.configure(api_key=gemini_api_key)
-        print("[GEMINI_DIAGNOSTIC] ==> Library configured.")
-        
-        # 3. Prepare data for the prompt
-        if not posts:
-            print("[GEMINI_DIAGNOSTIC] ==> No posts provided to summarize.")
-            return "No posts were provided to summarize."
-            
-        sorted_posts = sorted(posts, key=lambda x: x.get('timestamp', 0), reverse=True)
-        content_lines = [
-            f"Date: {datetime.fromtimestamp(post['timestamp'])}\nMessage:\n{post['message']}\n\n"
-            for post in sorted_posts
-        ]
-        user_prompt = f"Here are the posts about {ticker} for you to analyze (newest first):\n\n" + "".join(content_lines)
-        
-        print(f"[GEMINI_DIAGNOSTIC] ==> Prepared {len(sorted_posts)} posts for summarization ({len(user_prompt)} characters).")
-        
-        # 4. Run the async API call
-        print("[GEMINI_DIAGNOSTIC] ==> Starting asyncio event loop to call the API.")
-        summary = asyncio.run(_generate_post_summary_async(user_prompt, ticker))
-        print("[GEMINI_DIAGNOSTIC] ==> Successfully received summary from API.")
-        return summary
-        
-    except Exception as e:
-        # 5. Catch and print any exception with full details
-        import traceback
-        print("[GEMINI_DIAGNOSTIC] ==> An unhandled exception occurred!")
-        print(f"[GEMINI_DIAGNOSTIC] ==> Exception Type: {type(e).__name__}")
-        print(f"[GEMINI_DIAGNOSTIC] ==> Exception Details: {e}")
-        traceback.print_exc()
-        return f"Error generating summary: {e}"
-
-async def _generate_post_summary_async(user_prompt: str, ticker: str) -> str:
+async def _generate_post_summary_async(posts: List[Dict[str, Any]], ticker: str) -> str:
     """
     Async helper function to generate a summary using the Gemini API.
     """
+    # Sort posts by timestamp (most recent first)
+    sorted_posts = sorted(posts, key=lambda x: x.get('timestamp', 0), reverse=True)
+    
+    # Format the posts into a single string for the prompt
+    content_lines = [
+        f"Date: {datetime.fromtimestamp(post['timestamp'])}\nMessage:\n{post['message']}\n\n"
+        for post in sorted_posts
+    ]
+    
     system_prompt = """You are an expert financial analyst. Your task is to summarize the key insights about the given ticker in exactly 10 concise bullet points.
 
 Requirements:
@@ -75,6 +40,8 @@ Requirements:
 - Do not mention the sources, dates, or email addresses in your summary.
 - Present all information as direct market insights.
 - Number each bullet point from 1 to 10."""
+
+    user_prompt = f"Here are the posts about {ticker} for you to analyze (newest first):\n\n" + "".join(content_lines)
 
     generation_config = {
         "temperature": 0.3,
@@ -86,22 +53,53 @@ Requirements:
         generation_config=generation_config,
         system_instruction=system_prompt
     )
-    
-    print("[GEMINI_DIAGNOSTIC] ==> Inside async function, attempting to call model.generate_content_async()...")
-    response = await model.generate_content_async([user_prompt])
-    summary_text = response.text.strip()
-    
-    match = re.search(r'1\.\s+\*\*', summary_text)
-    if match:
-        summary_text = summary_text[match.start():]
-        
-    return summary_text
 
-# --- Main Interface Function ---
-# This is the function that acm_analysis.py calls.
+    try:
+        print("[GEMINI_DIAGNOSTIC] ==> Calling the Gemini API now...")
+        response = await model.generate_content_async([user_prompt])
+        summary_text = response.text.strip()
+        print("[GEMINI_DIAGNOSTIC] ==> Successfully received a response from the API.")
+
+        # --- START OF DIAGNOSTIC BLOCK ---
+        # Print the raw response to see exactly what the model returned
+        print("\n" + "="*30 + " RAW API RESPONSE " + "="*30)
+        print(summary_text)
+        print("="*28 + " END RAW API RESPONSE " + "="*28 + "\n")
+        
+        # Check if the expected pattern exists
+        print("[GEMINI_DIAGNOSTIC] ==> Searching for pattern '1. **' in the response...")
+        match = re.search(r'1\.\s+\*\*', summary_text)
+
+        if match:
+            print("[GEMINI_DIAGNOSTIC] ==> Pattern found. Stripping any text before the match.")
+            # If the pattern is found, slice the text from that point forward
+            summary_text = summary_text[match.start():]
+        else:
+            print("[GEMINI_DIAGNOSTIC] ==> WARNING: Pattern '1. **' not found. Returning the full, unprocessed response.")
+        # --- END OF DIAGNOSTIC BLOCK ---
+            
+        return summary_text
+    except Exception as e:
+        import traceback
+        print(f"[GEMINI_DIAGNOSTIC] ==> An exception occurred during the API call or processing.")
+        print(f"[GEMINI_DIAGNOSTIC] ==> Exception Type: {type(e).__name__}")
+        print(f"[GEMINI_DIAGNOSTIC] ==> Exception Details: {e}")
+        traceback.print_exc()
+        raise
+
+# This is the main interface function that acm_analysis.py calls.
 def generate_post_summary(posts: list, ticker: str) -> str:
-    # We call our new diagnostic wrapper instead of the original function.
-    return run_gemini_summarizer(posts, ticker)
+    """
+    Generates a weighted summary of forum posts and emails using the Gemini API.
+    """
+    if not posts:
+        return "No posts were provided to summarize."
+        
+    try:
+        return asyncio.run(_generate_post_summary_async(posts, ticker))
+    except Exception as e:
+        print(f"An error occurred while running the async summary generation: {str(e)}")
+        return "Error: Summary could not be generated."
 
 # --- Standalone Execution Logic (Unchanged) ---
 def process_ticker_posts(ticker: str, debug: bool = False):
@@ -136,6 +134,7 @@ def process_ticker_posts(ticker: str, debug: bool = False):
         else:
             print(f"No posts or emails found for {ticker}. Skipping summary.")
             return "No forum summary available."
+            
     except Exception as e:
         print(f"Error processing data for {ticker}: {e}")
         return "Error generating summary."
