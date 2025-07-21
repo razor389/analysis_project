@@ -1506,8 +1506,8 @@ def write_qualities_sheet(writer, final_output):
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
     ws["A1"].border = thin_border
     
-    # Split into individual quality entries (split on numbered items)
-    qualities = re.split(r'\n\n(?=\d+\.\s)', text.strip())
+    # Split into individual quality entries (robust to both \n and \n\n)
+    qualities = re.split(r'\n+(?=\d+\.\s)', text.strip())
         
     current_row = 3
     col = 1
@@ -1517,8 +1517,8 @@ def write_qualities_sheet(writer, final_output):
             continue
             
         # Extract the number, header, and description
-        # Updated pattern: number, bold header (no colon), then description
-        match = re.match(r'(\d+)\.\s*\*\*(.*?)\*\*\s*(.+)', quality.strip(), re.DOTALL)
+        # Updated pattern to handle extra spaces after numbers
+        match = re.match(r'(\d+)\.\s+\*\*(.*?)\*\*:\s*(.+)', quality.strip(), re.DOTALL)
         
         if match:
             number, header, description = match.groups()
