@@ -40,7 +40,7 @@ Requirements:
     user_prompt = f"Here are the posts about {ticker} for you to analyze (newest first):\n\n" + "".join(content_lines)
 
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-pro",
+        model_name="gemini-2.5-pro",
         system_instruction=system_prompt
     )
     
