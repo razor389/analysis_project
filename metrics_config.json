@@ -6,7 +6,6 @@
         "losses_and_expenses": "us-gaap:IncurredClaimsPropertyCasualtyAndLiability",
         "acquisition_costs": "us-gaap:DeferredPolicyAcquisitionCostAmortizationExpense",
         "underwriting_expenses": "us-gaap:OtherUnderwritingExpense",
-        "service_expenses": "pgr:NonInsuranceServiceExpenses",
         "taxes": "us-gaap:IncomeTaxExpenseBenefit",
         "interest_expenses": "us-gaap:InterestExpenseDebt"
       },
@@ -72,6 +71,86 @@
             "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
             "srt:ProductOrServiceAxis": "pgr:UnderwritingOperationsMember",
             "us-gaap:StatementBusinessSegmentsAxis": "pgr:PropertySegmentMember"
+          }
+        }
+      },
+      "balance_sheet_categories": {
+        "assets": [
+          "assets", "cash", "fixed_income", "preferred_stocks", "common_equities",
+          "short_term", "accrued_investment_income", "premiums_receivable",
+          "reinsurance_recoverables", "prepaid_reinsurance_premiums",
+          "deferred_acquisition_costs", "income_taxes", "property_and_equipment",
+          "goodwill", "intangibles", "other_assets"
+        ],
+        "liabilities": [
+          "liabilities", "unearned_premiums", "loss_reserves", "accounts_payable", "debt"
+        ],
+        "shareholders_equity": [
+          "shareholders_equity", "preferred_stock", "common_stock", "paid_in_capital",
+          "retained_earnings", "unrealized_cap_gain", "hedges", "forex_adjustments"
+        ]
+      }
+    },
+    "PRI": {
+      "profit_desc_metrics": {
+        "gross_revenues": "us-gaap:PremiumsWrittenNet",
+        "investment_income": "us-gaap:NetInvestmentIncome",
+        "losses_and_expenses": "us-gaap:PolicyholderBenefitsAndClaimsIncurredNet",
+        "acquisition_costs": "us-gaap:DeferredPolicyAcquisitionCostAmortizationExpense",
+        "underwriting_expenses": "us-gaap:OtherUnderwritingExpense",
+        "taxes": "us-gaap:IncomeTaxExpenseBenefit",
+        "interest_expenses": "us-gaap:InterestExpenseOperating"
+      },
+      "balance_sheet_metrics": {
+        "assets": "us-gaap:Assets",
+        "cash": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+        "fixed_income": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+        "common_equities": "us-gaap:EquitySecuritiesFvNi",
+        "short_term": "us-gaap:ShortTermInvestments",
+        "accrued_investment_income": "us-gaap:AccruedInvestmentIncomeReceivable",
+        "premiums_receivable": "us-gaap:PremiumsReceivableAtCarryingValue",
+        "reinsurance_recoverables": "us-gaap:ReinsuranceRecoverables",
+        "prepaid_reinsurance_premiums": "us-gaap:PrepaidReinsurancePremiums",
+        "deferred_acquisition_costs": "us-gaap:DeferredPolicyAcquisitionCosts",
+        "income_taxes": "us-gaap:DeferredTaxAssetsLiabilitiesNet",
+        "property_and_equipment": "us-gaap:PropertyPlantAndEquipmentNet",
+        "goodwill": "us-gaap:Goodwill",
+        "intangibles": "us-gaap:IntangibleAssetsNetExcludingGoodwill",
+        "other_assets": "us-gaap:OtherAssets",
+        "liabilities": "us-gaap:Liabilities",
+        "unearned_premiums": "us-gaap:UnearnedPremiums",
+        "loss_reserves": "us-gaap:LiabilityForClaimsAndClaimsAdjustmentExpense",
+        "accounts_payable": "us-gaap:AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent",
+        "debt": "us-gaap:DebtLongtermAndShorttermCombinedAmount",
+        "shareholders_equity": "us-gaap:StockholdersEquity",
+        "preferred_stock": "us-gaap:PreferredStockValueOutstanding",
+        "common_stock": "us-gaap:CommonStockValueOutstanding",
+        "paid_in_capital": "us-gaap:AdditionalPaidInCapitalCommonStock",
+        "retained_earnings": "us-gaap:RetainedEarningsAccumulatedDeficit",
+        "unrealized_cap_gain": "us-gaap:AccumulatedOtherComprehensiveIncomeLossAvailableForSaleSecuritiesAdjustmentNetOfTax",
+        "hedges": "us-gaap:AociLossCashFlowHedgeCumulativeGainLossAfterTax",
+        "forex_adjustments": "us-gaap:AccumulatedOtherComprehensiveIncomeLossForeignCurrencyTranslationAdjustmentNetOfTax"
+      },
+      "segmentation_mapping": {
+        "term_life": {
+          "tag": "us-gaap:Revenues",
+          "explicitMembers": {
+            "us-gaap:StatementBusinessSegmentsAxis": "pri:TermLifeInsuranceSegmentRevenuesMember"
+          }
+        },
+        "investment_savings": {
+          "tag": "us-gaap:Revenues",
+          "explicitMembers": {
+            "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+            "srt:ProductOrServiceAxis": "pgr:UnderwritingOperationsMember",
+            "us-gaap:StatementBusinessSegmentsAxis": "pri:InvestmentAndSavingsProductsSegmentRevenuesMember"
+          }
+        },
+        "corporate_and_other": {
+          "tag": "us-gaap:Revenues",
+          "explicitMembers": {
+            "us-gaap:ContractWithCustomerSalesChannelAxis": "pri:RevenuesFromSourcesOtherThanContractsWithCustomersMember",
+            "us-gaap:StatementBusinessSegmentsAxis": "us-gaap:CorporateAndOtherMember"
           }
         }
       },

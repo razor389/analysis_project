@@ -770,13 +770,32 @@ class MetricsExtractor:
             elems = soup.find_all(tag)
             for elem in elems:
                 try:
+                    context_ref = elem.get("contextRef") or elem.get("contextref")
+                    if not context_ref:
+                        continue
+
+                    # ---- START OF MODIFICATION ----
+                    # Find the context associated with the fact
+                    context = soup.find("context", {"id": context_ref})
+                    if not context:
+                        # Use the fallback helper if the primary find fails
+                        context = find_context(soup, context_ref)
+                    if not context:
+                        logger.warning(f"Could not find context for ref: {context_ref}")
+                        continue
+                    
+                    # **CRITICAL FIX**: Check if the context contains a <segment> element. 
+                    # If it does, this fact is for a business segment, not the consolidated
+                    # entity, and we should skip it for this general mapping.
+                    if context.find("segment"):
+                        continue
+                    # ---- END OF MODIFICATION ----
+
                     numeric_value = float(elem.get_text(strip=True))
                     scale = elem.get("scale", "0")
                     if scale and scale != "0":
                         numeric_value *= 10 ** int(scale)
-                    context_ref = elem.get("contextRef") or elem.get("contextref")
-                    if not context_ref:
-                        continue
+                    
                     context_data = self.parse_context(soup, context_ref)
                     period_text = context_data.get("period", "")
                     if not period_text:
@@ -942,8 +961,8 @@ def create_unified_year_output(year, fmp_data, sec_data):
        "gross_revenues": { "total": gross_revenues, "breakdown": segmentation breakdown },
        "investment_income",
        "internal_costs": {
-         "total" = losses_and_expenses + acquisition_costs + underwriting_expenses + service_expenses,
-         "breakdown": { "losses_and_expenses", "acquisition_costs", "underwriting_expenses", "service_expenses" }
+         "total" = losses_and_expenses + acquisition_costs + underwriting_expenses,
+         "breakdown": { "losses_and_expenses", "acquisition_costs", "underwriting_expenses"}
        },
        "operating_margin": {
          "total" = gross_revenues + investment_income - total internal costs,
@@ -1023,7 +1042,6 @@ def create_unified_year_output(year, fmp_data, sec_data):
     benefit_claims    = sec_profit.get("losses_and_expenses")
     acquisition_costs = sec_profit.get("acquisition_costs")
     underwriting_expenses = sec_profit.get("underwriting_expenses")
-    service_expenses  = sec_profit.get("service_expenses")
     taxes             = sec_profit.get("taxes")
     interest_expenses = sec_profit.get("interest_expenses")
     investment_income = sec_profit.get("investment_income")
@@ -1063,8 +1081,7 @@ def create_unified_year_output(year, fmp_data, sec_data):
     
     internal_costs_total = ((benefit_claims or 0) +
                             (acquisition_costs or 0) +
-                            (underwriting_expenses or 0) +
-                            (service_expenses or 0))
+                            (underwriting_expenses or 0))
     operating_margin_total = ((premium_earned or 0) + (investment_income or 0) - internal_costs_total)
     external_costs_total = ((taxes or 0) + (interest_expenses or 0))
     earnings = operating_margin_total - external_costs_total
@@ -1093,8 +1110,7 @@ def create_unified_year_output(year, fmp_data, sec_data):
             "breakdown": {
                 "losses_and_expenses": benefit_claims,
                 "acquisition_costs": acquisition_costs,
-                "underwriting_expenses": underwriting_expenses,
-                "service_expenses": service_expenses
+                "underwriting_expenses": underwriting_expenses
             }
         },
         "operating_margin": {
