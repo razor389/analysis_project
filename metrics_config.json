@@ -141,15 +141,12 @@
         "investment_savings": {
           "tag": "us-gaap:Revenues",
           "explicitMembers": {
-            "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
-            "srt:ProductOrServiceAxis": "pgr:UnderwritingOperationsMember",
             "us-gaap:StatementBusinessSegmentsAxis": "pri:InvestmentAndSavingsProductsSegmentRevenuesMember"
           }
         },
         "corporate_and_other": {
           "tag": "us-gaap:Revenues",
           "explicitMembers": {
-            "us-gaap:ContractWithCustomerSalesChannelAxis": "pri:RevenuesFromSourcesOtherThanContractsWithCustomersMember",
             "us-gaap:StatementBusinessSegmentsAxis": "us-gaap:CorporateAndOtherMember"
           }
         }

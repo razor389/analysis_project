@@ -157,7 +157,7 @@ def write_company_description(writer, final_output):
     ws = wb["Co. Desc"]
     ws.freeze_panes = "B1"
 
-    # Write and format labels
+    # Write and format labels (unchanged)
     ws.cell(row=1, column=3, value="Currency").fill = label_fill
     ws.cell(row=1, column=3).font = label_font
     ws.cell(row=1, column=3).border = thin_border
@@ -174,7 +174,7 @@ def write_company_description(writer, final_output):
     ws.cell(row=1, column=9).font = label_font
     ws.cell(row=1, column=9).border = thin_border
 
-    # Write and format data cells
+    # Write and format data cells (unchanged)
     rc_cell = ws.cell(row=2, column=3, value=reported_currency)
     rc_cell.fill = data_fill
     rc_cell.font = label_font
@@ -210,7 +210,6 @@ def write_company_description(writer, final_output):
     else:
         new_years = ["2024", "2025"]
 
-    # Append the new years to the sorted_years list
     all_years = sorted_years + new_years
 
     # Write the years at row=3 starting at column B
@@ -223,168 +222,118 @@ def write_company_description(writer, final_output):
 
     # Define metrics that should be displayed in millions
     million_scale_metrics = {
-        "net_profit",
-        "dividends_paid", 
-        "shares_outstanding",
-        "buyback",
-        "share_equity",
-        "assets"
+        "net_profit", "dividends_paid", "shares_outstanding",
+        "buyback", "share_equity", "assets"
     }
 
     # Define the metrics and their corresponding row positions
     metric_positions = {
-        "net_profit": 4,            
-        "diluted_eps": 5,           
-        "operating_eps": 6,         
-        "pe_ratio": 8,              
-        "price_low": 9,             
-        "price_high": 10,           
-        "dividends_paid": 12,       
-        "dividends_per_share": 13,  
-        "avg_dividend_yield": 14,   
-        "shares_outstanding": 16,   
-        "buyback": 17,              
-        "share_equity": 19,         
-        "book_value_per_share": 20, 
-        "assets": 22,               
-        "return_on_equity": 24,     
-        "return_on_assets": 25,     
-        "leverage_ratio": 26        
+        "net_profit": 4, "diluted_eps": 5, "operating_eps": 6, "pe_ratio": 8,
+        "price_low": 9, "price_high": 10, "dividends_paid": 12, "dividends_per_share": 13,
+        "avg_dividend_yield": 14, "shares_outstanding": 16, "buyback": 17, "share_equity": 19,
+        "book_value_per_share": 20, "assets": 22, "return_on_equity": 24, "return_on_assets": 25,
+        "leverage_ratio": 26
     }
 
     # Define human-readable labels for each metric
     metric_labels = {
-        "net_profit": "Net Profit",
-        "diluted_eps": "Diluted EPS",
-        "operating_eps": "Operating EPS",
-        "pe_ratio": "P/E Ratio",
-        "price_low": "Yrly Price Low",
-        "price_high": "Yrly Price High",
-        "dividends_paid": "Dividends Paid",
-        "dividends_per_share": "Dividends/Share",
-        "avg_dividend_yield": "Avg Div Yield",
-        "shares_outstanding": "Shares Outstanding",
-        "buyback": "Buyback",
-        "share_equity": "Share Equity",
-        "book_value_per_share": "Book Value/Share",
-        "assets": "Total Assets",
-        "return_on_equity": "Return on Equity",
-        "return_on_assets": "Return on Assets",
+        "net_profit": "Net Profit", "diluted_eps": "Diluted EPS", "operating_eps": "Operating EPS",
+        "pe_ratio": "P/E Ratio", "price_low": "Yrly Price Low", "price_high": "Yrly Price High",
+        "dividends_paid": "Dividends Paid", "dividends_per_share": "Dividends/Share",
+        "avg_dividend_yield": "Avg Div Yield", "shares_outstanding": "Shares Outstanding",
+        "buyback": "Buyback", "share_equity": "Share Equity", "book_value_per_share": "Book Value/Share",
+        "assets": "Total Assets", "return_on_equity": "Return on Equity", "return_on_assets": "Return on Assets",
         "leverage_ratio": "Leverage Ratio"
     }
 
-    # Updated number formats according to specifications
+    # Number formats for each metric
     number_formats = {
-        "net_profit": '#,##0',          # Millions with commas, no $ no M
-        "diluted_eps": '#,##0.00',      # Dollars and cents
-        "operating_eps": '#,##0.00',    # Dollars and cents
-        "pe_ratio": '#,##0.0',          # One decimal place
-        "price_low": '#,##0.00',        # Dollars and cents
-        "price_high": '#,##0.00',       # Dollars and cents
-        "dividends_paid": '#,##0',      # Millions with commas, no $ no M
-        "dividends_per_share": '#,##0.00',  # Dollars and cents
-        "avg_dividend_yield": '0.00%',   # Percentage with two decimal places
-        "shares_outstanding": '#,##0',   # Millions with commas, no $ no M
-        "buyback": '#,##0',             # Millions with commas, no $ no M
-        "share_equity": '#,##0',        # Millions with commas, no $ no M
-        "book_value_per_share": '#,##0.00',  # Dollars and cents
-        "assets": '#,##0',              # Millions with commas, no $ no M
-        "return_on_equity": '0.00%',    # Percentage with two decimal places
-        "return_on_assets": '0.00%',    # Percentage with two decimal places
-        "leverage_ratio": '#,##0.0'     # One decimal place
+        "net_profit": '#,##0', "diluted_eps": '#,##0.00', "operating_eps": '#,##0.00',
+        "pe_ratio": '#,##0.0', "price_low": '#,##0.00', "price_high": '#,##0.00',
+        "dividends_paid": '#,##0', "dividends_per_share": '#,##0.00', "avg_dividend_yield": '0.00%',
+        "shares_outstanding": '#,##0', "buyback": '#,##0', "share_equity": '#,##0',
+        "book_value_per_share": '#,##0.00', "assets": '#,##0', "return_on_equity": '0.00%',
+        "return_on_assets": '0.00%', "leverage_ratio": '#,##0.0'
     }
 
-    # Write metric labels in column A with label formatting
+    # Write metric labels in column A
     for metric, metric_row in metric_positions.items():
         label_cell = ws.cell(row=metric_row, column=1, value=metric_labels[metric])
         label_cell.fill = label_fill
         label_cell.font = label_font
         label_cell.border = thin_border
 
-    # For each metric, write the data for each year in the specified rows
+    # === REVISED FORMULA GENERATION LOGIC ===
+    # For each metric, write the data for each year, using formulas where possible
     for metric, metric_row in metric_positions.items():
         for i, year in enumerate(all_years):
             col = start_col + i
             col_letter = get_column_letter(col)
-            data_cell = None
+            
+            use_formula = True
+            formula = ""
+            value = None # Used only when use_formula is False
 
-            if year in new_years:
-                # For new years, we'll add formulas for certain metrics
-                if metric == "diluted_eps":
+            if metric == "operating_eps":
+                if year in new_years:
+                    # For new years, calculate from net_profit / shares_outstanding
                     formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['shares_outstanding']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "operating_eps":
-                    formula = f"={col_letter}{metric_positions['diluted_eps']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "pe_ratio":
-                    formula = f"=(({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2)/{col_letter}{metric_positions['diluted_eps']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "dividends_per_share":
-                    formula = f"={col_letter}{metric_positions['dividends_paid']}/{col_letter}{metric_positions['shares_outstanding']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "buyback":
-                    prev_col = get_column_letter(col-1)
-                    formula = f"=({prev_col}{metric_positions['shares_outstanding']}-{col_letter}{metric_positions['shares_outstanding']})*({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "avg_dividend_yield":
-                    formula = f"={col_letter}{metric_positions['dividends_per_share']}/((({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2))"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "book_value_per_share":
-                    formula = f"={col_letter}{metric_positions['share_equity']}/{col_letter}{metric_positions['shares_outstanding']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "return_on_equity":
-                    formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['share_equity']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "return_on_assets":
-                    formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['assets']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
-                elif metric == "leverage_ratio":
-                    formula = f"={col_letter}{metric_positions['assets']}/{col_letter}{metric_positions['share_equity']}"
-                    data_cell = ws.cell(row=metric_row, column=col, value=formula)
-                
                 else:
+                    # For historical years, use the raw data
+                    use_formula = False
+            elif metric == "diluted_eps":
+                formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['shares_outstanding']}"
+            elif metric == "pe_ratio":
+                formula = f"=(({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2)/{col_letter}{metric_positions['diluted_eps']}"
+            elif metric == "buyback":
+                if i > 0: # Skip first year
+                    prev_col_letter = get_column_letter(col - 1)
+                    formula = f"=({prev_col_letter}{metric_positions['shares_outstanding']}-{col_letter}{metric_positions['shares_outstanding']})*(({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2)"
+                else: # For the first year, no formula is possible
+                    use_formula = False
+                    value = "N/A"
+            elif metric == "dividends_per_share":
+                formula = f"={col_letter}{metric_positions['dividends_paid']}/{col_letter}{metric_positions['shares_outstanding']}"
+            elif metric == "avg_dividend_yield":
+                formula = f"={col_letter}{metric_positions['dividends_per_share']}/((({col_letter}{metric_positions['price_low']}+{col_letter}{metric_positions['price_high']})/2))"
+            elif metric == "book_value_per_share":
+                formula = f"={col_letter}{metric_positions['share_equity']}/{col_letter}{metric_positions['shares_outstanding']}"
+            elif metric == "return_on_equity":
+                formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['share_equity']}"
+            elif metric == "return_on_assets":
+                formula = f"={col_letter}{metric_positions['net_profit']}/{col_letter}{metric_positions['assets']}"
+            elif metric == "leverage_ratio":
+                formula = f"={col_letter}{metric_positions['assets']}/{col_letter}{metric_positions['share_equity']}"
+            else:
+                # This metric is a primary input, not a calculation
+                use_formula = False
+
+            # --- Apply either the formula or the static value ---
+            if use_formula:
+                data_cell = ws.cell(row=metric_row, column=col, value=formula)
+            else:
+                if value != "N/A": # If not already set (e.g., for first year buyback)
                     value = cd_data.get(year, {}).get(metric)
                     if value is not None and metric in million_scale_metrics:
-                        value = value / 1_000_000
-                    data_cell = ws.cell(row=metric_row, column=col, value=value)
-
-                data_cell.font = data_tnr_italic_font
-                data_cell.alignment = right_alignment
-            
-            else:
-                # For historical years, map the new field names to their values
-                if metric == "return_on_equity":
-                    value = cd_data.get(year, {}).get("return_on_equity")
-                elif metric == "return_on_assets":
-                    value = cd_data.get(year, {}).get("return_on_assets")
-                elif metric == "leverage_ratio":
-                    value = cd_data.get(year, {}).get("leverage_ratio")
-                else:
-                    value = cd_data.get(year, {}).get(metric)
-                
-                if value is not None and metric in million_scale_metrics:
-                    value = value / 1_000_000
+                        value /= 1_000_000
                 data_cell = ws.cell(row=metric_row, column=col, value=value)
-                data_cell.font = data_tnr_font
 
-            # Apply common formatting to all cells, whether formula or value
+            # Apply common formatting to all data cells
             data_cell.fill = data_fill
             data_cell.border = thin_border
-            data_cell.number_format = number_formats[metric]
+            data_cell.font = data_tnr_italic_font if year in new_years else data_tnr_font
+            data_cell.alignment = right_alignment
+            if metric in number_formats:
+                data_cell.number_format = number_formats[metric]
 
 def write_analyses_sheet(writer, final_output):
+    """
+    Writes the Analyses sheet with dynamic formulas for all calculated metrics,
+    including investment characteristics and the main data table for insurance-specific values.
+    """
     reported_currency = final_output["summary"]["reported_currency"]
     analyses = final_output["analyses"]
-    inv_char = analyses["investment_characteristics"]
+    # inv_char is no longer needed as we will calculate these values with formulas
     data = analyses["data"]
     wb = writer.book
 
@@ -393,167 +342,150 @@ def write_analyses_sheet(writer, final_output):
     ws = wb["Analyses"]
     ws.freeze_panes = "B1"
 
-    # Write and format the "Investment Characteristics" title
-    ic_cell = ws.cell(row=1, column=6, value="Investment Characteristics (in mlns "+reported_currency + ")")
+    # Write and format the "Investment Characteristics" title (unchanged)
+    ic_cell = ws.cell(row=1, column=6, value="Investment Characteristics (in mlns " + reported_currency + ")")
     ic_cell.fill = label_fill
     ic_cell.font = title_font
     apply_table_border(ws, 1, 5, 9)
     title_fill_range(ws, 1, 5, 9)
 
-    # Extract required fields and write labels with formatting
+    # Write labels for Investment Characteristics (unchanged)
     labels_with_positions = [
-        (3, 3, "Earnings Analysis:"),
-        (5, 4, "Growth Rate %:"),
-        (7, 4, "Quality %:"),
-        (3, 8, "Use Of Earnings Analysis:"),
-        (5, 9, "Avg Div Payout Rate:"),
-        (7, 9, "Avg Stk Buyback Rate:"),
-        (16, 3, "Premium Analysis:"),
-        (18, 4, "Growth Rate %:"),
-        (20, 4, "Growth Rate PS %:"),
-        (16, 8, "Premium Analysis (last 5 yrs.):"),
-        (18, 9, "Growth Rate %:"),
-        (20, 9, "Growth Rate PS %:")
+        (3, 3, "Earnings Analysis:"), (5, 4, "Growth Rate %:"), (7, 4, "Quality %:"),
+        (3, 8, "Use Of Earnings Analysis:"), (5, 9, "Avg Div Payout Rate:"), (7, 9, "Avg Stk Buyback Rate:"),
+        (16, 3, "Premium Analysis:"), (18, 4, "Growth Rate %:"), (20, 4, "Growth Rate PS %:"),
+        (16, 8, "Premium Analysis (last 5 yrs.):"), (18, 9, "Growth Rate %:"), (20, 9, "Growth Rate PS %:")
     ]
-
     for row, col, text in labels_with_positions:
         cell = ws.cell(row=row, column=col, value=text)
         cell.fill = label_fill
         cell.font = label_font
-        apply_table_border(ws, row, col, col+1)
-        title_fill_range(ws, row, col, col+1)
+        apply_table_border(ws, row, col, col + 1)
+        title_fill_range(ws, row, col, col + 1)
 
-    # Fetch data for the investment characteristics
-    growth_rate_operating_eps = inv_char["earnings_analysis"].get("growth_rate_percent_operating_eps")
-    quality_percent = inv_char["earnings_analysis"].get("quality_percent")
+    # --- FORMULA GENERATION FOR INVESTMENT CHARACTERISTICS ---
+    
+    # Get historical year range from Co. Desc sheet to build formulas
+    cd_data = final_output["company_description"]["data"]
+    sorted_years_hist = sorted(cd_data.keys(), key=lambda x: int(x))
+    
+    if not sorted_years_hist:
+        print("Warning: No historical data found in 'company_description' to build analysis formulas.")
+        return
 
-    avg_div_payout = inv_char["use_of_earnings_analysis"].get("avg_dividend_payout_percent")
-    avg_stk_buyback = inv_char["use_of_earnings_analysis"].get("avg_stock_buyback_percent")
+    # Define column letters for the full historical range
+    first_year_col = 2
+    last_year_col = first_year_col + len(sorted_years_hist) - 1
+    first_year_letter = get_column_letter(first_year_col)
+    last_year_letter = get_column_letter(last_year_col)
+    
+    # Define column letters for the last 5 years
+    last_5y_count = min(5, len(sorted_years_hist))
+    first_5y_col = last_year_col - last_5y_count + 1
+    first_5y_letter = get_column_letter(first_5y_col)
 
-    growth_rate_rev = inv_char["sales_analysis"].get("growth_rate_percent_revenues")
-    growth_rate_sps = inv_char["sales_analysis"].get("growth_rate_percent_sales_per_share")
-
-    growth_rate_rev_5y = inv_char["sales_analysis_last_5_years"].get("growth_rate_percent_revenues")
-    growth_rate_sps_5y = inv_char["sales_analysis_last_5_years"].get("growth_rate_percent_sales_per_share")
-
-    # Write the investment characteristics data
-    data_cells = {
-        (5, 5): growth_rate_operating_eps,
-        (7, 5): quality_percent,
-        (5, 10): avg_div_payout,
-        (7, 10): avg_stk_buyback,
-        (18, 5): growth_rate_rev,
-        (20, 5): growth_rate_sps,
-        (18, 10): growth_rate_rev_5y,
-        (20, 10): growth_rate_sps_5y
+    # Define the data cells with formulas instead of static values
+    data_cells_formulas = {
+        # Earnings Growth Rate (All Years): Using RATE on Operating EPS from Co. Desc (Row 6)
+        (5, 5): f"=RATE(COUNT('Co. Desc'!{first_year_letter}6:{last_year_letter}6),,'Co. Desc'!{first_year_letter}6*-1,'Co. Desc'!{last_year_letter}6)",
+        
+        # Quality % and Payout Rate (Unchanged from previous version)
+        (7, 5): f"=AVERAGE('Co. Desc'!{first_year_letter}5:{last_year_letter}5)/AVERAGE('Co. Desc'!{first_year_letter}6:{last_year_letter}6)",
+        (5, 10): f"=AVERAGE('Co. Desc'!{first_year_letter}13:{last_year_letter}13)/AVERAGE('Co. Desc'!{first_year_letter}6:{last_year_letter}6)",
+        (7, 10): f"=SUM('Co. Desc'!{first_year_letter}17:{last_year_letter}17)/SUM('Co. Desc'!{first_year_letter}4:{last_year_letter}4)",
+        
+        # Premium Growth Rate (All Years): Using RATE on Premium Earned from this sheet (Row 10)
+        (18, 5): f"=RATE(COUNT({first_year_letter}10:{last_year_letter}10),,{first_year_letter}10*-1,{last_year_letter}10)",
+        
+        # Premium per Share Growth (All Years): Standard CAGR formula is more suitable here
+        (20, 5): f"=((({last_year_letter}10/'Co. Desc'!{last_year_letter}16)/({first_year_letter}10/'Co. Desc'!{first_year_letter}16))^(1/({len(sorted_years_hist)}-1)))-1",
+        
+        # Premium Growth Rate (Last 5 Years): Using RATE on the last 5 years of data
+        (18, 10): f"=RATE(COUNT({first_5y_letter}10:{last_year_letter}10),,{first_5y_letter}10*-1,{last_year_letter}10)",
+        
+        # Premium per Share Growth (Last 5 Years): Standard CAGR on the last 5 years
+        (20, 10): f"=((({last_year_letter}10/'Co. Desc'!{last_year_letter}16)/({first_5y_letter}10/'Co. Desc'!{first_5y_letter}16))^(1/({last_5y_count}-1)))-1",
     }
 
-    for (row, col), value in data_cells.items():
-        cell = ws.cell(row=row, column=col, value=value)
+    # Write the investment characteristics data using the new formulas
+    for (row, col), formula in data_cells_formulas.items():
+        cell = ws.cell(row=row, column=col, value=formula)
         cell.fill = data_fill
         cell.font = data_tnr_bold_font
         cell.border = thin_border
         cell.number_format = '0.0%'
 
-    # Handle the data by years
-    sorted_years = sorted(data.keys(), key=lambda x: int(x))
-    
-    # Determine the next two years
-    if sorted_years:
-        max_year = max(int(year) for year in sorted_years)
-        new_years = [str(max_year + 1), str(max_year + 2)]
-    else:
-        new_years = ["2024", "2025"]
+    # --- MAIN DATA TABLE WITH FORMULAS ---
 
-    all_years = sorted_years + new_years
+    # Get all years (historical + new)
+    max_year = int(sorted_years_hist[-1])
+    new_years = [str(max_year + 1), str(max_year + 2)]
+    all_years = sorted_years_hist + new_years
     start_col = 2  # Column B
 
-    # Write years at row 9 and row 22
+    # Write year headers for the data tables
     for i, year in enumerate(all_years):
-        for row in [9, 22]:
+        for row in [9, 22]: # Rows for year headers
             cell = ws.cell(row=row, column=start_col + i, value=year)
             cell.fill = label_fill
             cell.font = label_font
             cell.border = thin_border
 
-    # Define the insurance metrics and their row positions
-    metric_rows_1 = {
-        "premium_earned": 10,
-        "benefit_claims": 11,
-        "gross_underwriting_profit": 12,
-        "underwriting_yield_on_asset": 13,
-        "investment_income": 14,
-        "investment_yield_on_asset": 15
-    }
+    # Define metric rows and labels (unchanged)
+    metric_rows_1 = { "premium_earned": 10, "benefit_claims": 11, "gross_underwriting_profit": 12, "underwriting_yield_on_asset": 13, "investment_income": 14, "investment_yield_on_asset": 15 }
+    metric_rows_2 = { "non_claim_expenses": 23, "expense_yield_on_asset": 24, "tax_rate": 25, "premium_equity_ratio": 26 }
+    additional_labels = { 10: "Premium Earned", 11: "Benefit Claims", 12: "Gross Underwriting Profit", 13: "Underwriting Yield on Asset", 14: "Investment Income", 15: "Investment Yield on Asset", 23: "Non-Claim Expenses", 24: "Expense Yield on Asset", 25: "Tax Rate", 26: "Premium/Equity Ratio" }
+    number_formats = { "premium_earned": '#,##0', "benefit_claims": '#,##0', "gross_underwriting_profit": '#,##0', "underwriting_yield_on_asset": '0.00%', "investment_income": '#,##0', "investment_yield_on_asset": '0.00%', "non_claim_expenses": '#,##0', "expense_yield_on_asset": '0.00%', "tax_rate": '0.00%', "premium_equity_ratio": '0.00' }
+    million_scale_metrics = { "premium_earned", "benefit_claims", "gross_underwriting_profit", "investment_income", "non_claim_expenses" }
 
-    metric_rows_2 = {
-        "non_claim_expenses": 23,
-        "expense_yield_on_asset": 24,
-        "tax_rate": 25,
-        "premium_equity_ratio": 26
-    }
-
-    # Add labels for metrics
-    additional_labels = {
-        10: "Premium Earned",
-        11: "Benefit Claims",
-        12: "Gross Underwriting Profit",
-        13: "Underwriting Yield on Asset",
-        14: "Investment Income",
-        15: "Investment Yield on Asset",
-        23: "Non-Claim Expenses",
-        24: "Expense Yield on Asset",
-        25: "Tax Rate",
-        26: "Premium/Equity Ratio"
-    }
-
-    # Define formatting rules
-    number_formats = {
-        "premium_earned": '#,##0',
-        "benefit_claims": '#,##0',
-        "gross_underwriting_profit": '#,##0',
-        "underwriting_yield_on_asset": '0.00%',
-        "investment_income": '#,##0',
-        "investment_yield_on_asset": '0.00%',
-        "non_claim_expenses": '#,##0',
-        "expense_yield_on_asset": '0.00%',
-        "tax_rate": '0.00%',
-        "premium_equity_ratio": '0.00'
-    }
-
-    # Define metrics that should be displayed in millions
-    million_scale_metrics = {
-        "premium_earned",
-        "benefit_claims",
-        "gross_underwriting_profit",
-        "investment_income",
-        "non_claim_expenses"
-    }
-
+    # Write labels for the main data table
     for row, label in additional_labels.items():
         cell = ws.cell(row=row, column=1, value=label)
         cell.fill = label_fill
         cell.font = label_font
         cell.border = thin_border
 
-    # Write both sets of metrics
-    for metric_rows in [metric_rows_1, metric_rows_2]:
-        for metric, row_num in metric_rows.items():
-            for i, year in enumerate(all_years):
-                col = start_col + i
-                
-                if year in new_years:
-                    val = None  # Leave future years blank for insurance metrics
-                else:
-                    val = data.get(year, {}).get(metric)
-                    if val is not None and metric in million_scale_metrics:
-                        val = val / 1_000_000
+    # Write the main data table using a mix of static values (historical) and formulas
+    all_metric_rows = {**metric_rows_1, **metric_rows_2}
+    for metric, row_num in all_metric_rows.items():
+        for i, year in enumerate(all_years):
+            col = start_col + i
+            col_letter = get_column_letter(col)
+            
+            # Default to no value
+            cell_value = None
+            is_formula = False
 
-                cell = ws.cell(row=row_num, column=col, value=val)
-                cell.fill = data_fill
-                cell.font = data_tnr_italic_font if year in new_years else data_tnr_font
-                cell.border = thin_border
-                cell.number_format = number_formats[metric]
+            # --- DEFINE FORMULAS FOR CALCULATED METRICS ---
+            if metric == "gross_underwriting_profit":
+                cell_value = f"={col_letter}{metric_rows_1['premium_earned']}-{col_letter}{metric_rows_1['benefit_claims']}"
+                is_formula = True
+            elif metric == "underwriting_yield_on_asset":
+                cell_value = f"={col_letter}{metric_rows_1['gross_underwriting_profit']}/'Co. Desc'!{col_letter}22" # Assets are in row 22
+                is_formula = True
+            elif metric == "investment_yield_on_asset":
+                cell_value = f"={col_letter}{metric_rows_1['investment_income']}/'Co. Desc'!{col_letter}22"
+                is_formula = True
+            elif metric == "expense_yield_on_asset":
+                cell_value = f"={col_letter}{metric_rows_2['non_claim_expenses']}/'Co. Desc'!{col_letter}22"
+                is_formula = True
+            elif metric == "premium_equity_ratio":
+                cell_value = f"={col_letter}{metric_rows_1['premium_earned']}/'Co. Desc'!{col_letter}19" # Share Equity is in row 19
+                is_formula = True
+            
+            # For primary data, get value from JSON for historical years
+            if not is_formula and year in sorted_years_hist:
+                cell_value = data.get(year, {}).get(metric)
+                if cell_value is not None and metric in million_scale_metrics:
+                    cell_value /= 1_000_000
+            
+            # Write value to cell
+            cell = ws.cell(row=row_num, column=col, value=cell_value)
+            cell.fill = data_fill
+            cell.font = data_tnr_italic_font if year in new_years else data_tnr_font
+            cell.border = thin_border
+            cell.number_format = number_formats[metric]
+            cell.alignment = right_alignment
 
 def write_profit_desc_sheet(writer, final_output):
     """
@@ -1826,6 +1758,105 @@ def generate_config_note(ticker, wb):
         cell.font = Font(italic=True, size=9, color="666666")
         cell.fill = PatternFill(start_color="FFFFE0", end_color="FFFFE0", fill_type="solid")
 
+def sync_data_from_profit_desc_bs(writer):
+    """
+    Updates the Analyses sheet with formula references to the Profit.Desc. sheet
+    for key insurance metrics. This ensures data is synced between the two sheets.
+
+    Mappings:
+    - Analyses!Premium Earned      <- Profit.Desc!Gross Revenues
+    - Analyses!Benefit Claims      <- Profit.Desc!losses_and_expenses
+    - Analyses!Investment Income   <- Profit.Desc!Investment Income
+    - Analyses!Non-Claim Expenses  <- SUM(Profit.Desc!acquisition_costs + underwriting_expenses)
+    """
+    wb = writer.book
+
+    # 1. Ensure both required sheets exist
+    if "Analyses" not in wb.sheetnames or "Profit.Desc." not in wb.sheetnames:
+        print("Warning: Cannot sync data - 'Analyses' or 'Profit.Desc.' sheet not found.")
+        return
+
+    analyses_ws = wb["Analyses"]
+    profit_desc_ws = wb["Profit.Desc."]
+
+    # 2. Define the static row numbers in the 'Analyses' sheet
+    analyses_target_rows = {
+        "premium_earned": 10,
+        "benefit_claims": 11,
+        "investment_income": 14,
+        "non_claim_expenses": 23
+    }
+
+    # 3. Dynamically find the source row numbers in the 'Profit.Desc.' sheet
+    pd_source_rows = {}
+    for row in range(1, profit_desc_ws.max_row + 1):
+        main_label = profit_desc_ws.cell(row=row, column=1).value
+        breakdown_label = profit_desc_ws.cell(row=row, column=2).value
+        if main_label:
+            pd_source_rows[main_label] = row
+        if breakdown_label:
+            pd_source_rows[breakdown_label] = row
+            
+    # Check if all required source labels were found
+    required_keys = [
+        "Gross Revenues:", "Investment Income:", "losses_and_expenses",
+        "acquisition_costs", "underwriting_expenses"
+    ]
+    if not all(key in pd_source_rows for key in required_keys):
+        print("Warning: Could not find all required source rows in Profit.Desc. sheet. Sync aborted.")
+        return
+
+    # 4. Get and match the year columns from both sheets
+    analyses_years = []
+    col = 2  # Analyses years start at column B
+    while True:
+        year_cell = analyses_ws.cell(row=9, column=col)
+        if year_cell.value is None: break
+        analyses_years.append((col, str(year_cell.value)))
+        col += 1
+
+    profit_desc_years = []
+    col = 4  # Profit.Desc. years start at column D
+    while True:
+        year_cell = profit_desc_ws.cell(row=3, column=col)
+        if year_cell.value is None or col > profit_desc_ws.max_column: break
+        profit_desc_years.append((col, str(year_cell.value)))
+        col += 2  # Skip percentage column
+
+    # 5. Loop through matched years and write the formulas
+    for a_col, a_year in analyses_years:
+        for pd_col, pd_year in profit_desc_years:
+            if a_year == pd_year:
+                pd_col_letter = get_column_letter(pd_col)
+
+                # --- Create and write each formula ---
+
+                # Premium Earned <- Gross Revenues
+                formula_pe = f"='Profit.Desc.'!{pd_col_letter}{pd_source_rows['Gross Revenues:']}"
+                cell_pe = analyses_ws.cell(row=analyses_target_rows['premium_earned'], column=a_col, value=formula_pe)
+                cell_pe.number_format = '#,##0'
+
+                # Benefit Claims <- losses_and_expenses
+                formula_bc = f"='Profit.Desc.'!{pd_col_letter}{pd_source_rows['losses_and_expenses']}"
+                cell_bc = analyses_ws.cell(row=analyses_target_rows['benefit_claims'], column=a_col, value=formula_bc)
+                cell_bc.number_format = '#,##0'
+
+                # Investment Income <- Investment Income
+                formula_ii = f"='Profit.Desc.'!{pd_col_letter}{pd_source_rows['Investment Income:']}"
+                cell_ii = analyses_ws.cell(row=analyses_target_rows['investment_income'], column=a_col, value=formula_ii)
+                cell_ii.number_format = '#,##0'
+                
+                # Non-Claim Expenses <- SUM(acquisition_costs + underwriting_expenses)
+                acq_costs_ref = f"'Profit.Desc.'!{pd_col_letter}{pd_source_rows['acquisition_costs']}"
+                uw_exp_ref = f"'Profit.Desc.'!{pd_col_letter}{pd_source_rows['underwriting_expenses']}"
+                formula_nce = f"=SUM({acq_costs_ref},{uw_exp_ref})"
+                cell_nce = analyses_ws.cell(row=analyses_target_rows['non_claim_expenses'], column=a_col, value=formula_nce)
+                cell_nce.number_format = '#,##0'
+
+                break # Move to the next year in Analyses sheet
+
+    print("Successfully synced data from Profit.Desc. to Analyses sheet.")
+
 def generate_excel_for_ticker_year(ticker: str, year: int):
     """
     Generate the Excel file for the given ticker and year, writing to:
@@ -1858,6 +1889,7 @@ def generate_excel_for_ticker_year(ticker: str, year: int):
     write_valuation_sheet(writer, final_output, ticker)
     generate_config_note(ticker, writer.book)
 
+    sync_data_from_profit_desc_bs(writer)
     # 4. Apply workbook formatting (remove gridlines, etc.)
     format_workbook(writer)
 
