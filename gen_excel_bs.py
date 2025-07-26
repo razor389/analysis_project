@@ -895,72 +895,70 @@ def write_qualities_sheet(writer, final_output):
     - Wrapped descriptive text starting on the next line
     Each quality is separated by a blank line for readability.
     """
+    # nothing to do if no qualities
     if not final_output.get("qualities"):
         return
-    
+
     wb = writer.book
 
-    # Create sheet if it doesn't exist
-    if "Qualities" not in wb.sheetnames:
-        wb.create_sheet("Qualities")
-    ws = wb["Qualities"]
+    # Create sheet if it doesn't exist, otherwise clear it
+    if "Qualities" in wb.sheetnames:
+        ws = wb["Qualities"]
+        ws.delete_rows(1, ws.max_row)
+    else:
+        ws = wb.create_sheet("Qualities")
 
-    # Get the qualities text
-    text = final_output.get("qualities", "No summary available.")
-
-    # Set title
+    # Title row
     ws["A1"] = "Core Analysis"
-    ws["A1"].font = Font(name="Times New Roman", size=14, bold=True)
-    ws["A1"].fill = label_fill
+    ws["A1"].font      = Font(name="Times New Roman", size=14, bold=True)
+    ws["A1"].fill      = label_fill
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
-    ws["A1"].border = thin_border
+    ws["A1"].border    = thin_border
 
-    # Split into individual quality entries (split on numbered items)
-    qualities = re.split(r'\n\n(?=\d+\.)', text.strip())
-    
+    text = final_output["qualities"].strip()
+
+    # Split on any run of 1+ newlines immediately before "digit+."
+    qualities = re.split(r'(?:\r?\n)+(?=\d+\.)', text)
+
     current_row = 3
     col = 1
 
-    for quality in qualities:
-        if not quality.strip():
+    for entry in qualities:
+        entry = entry.strip()
+        if not entry:
             continue
-            
-        # Extract the number, header, and description
-        # Pattern matches: number, bold header, and description
-        match = re.match(r'(\d+)\.\s*\*\*(.*?)\*\*:(.+)', quality.strip(), re.DOTALL)
-        
-        if match:
-            number, header, description = match.groups()
-            
-            # Write the numbered header line
-            header_cell = ws.cell(row=current_row, column=col)
-            header_cell.value = f"{number}. {header}:"
-            header_cell.font = Font(name="Arial", size=10, bold=True)
+
+        # First try to grab markdown-bold header (with or without colon inside)
+        m = re.match(r'(\d+)\.\s*\*\*(.*?)\*\*\s*[:]?[\s]*(.*)', entry, re.DOTALL)
+        if not m:
+            # fallback to plain "1. Header: description"
+            m = re.match(r'(\d+)\.\s*(.*?):\s*(.*)', entry, re.DOTALL)
+        if not m:
+            # if it still fails, skip
+            continue
+
+        number, header, description = m.groups()
+        header = header.rstrip(':').strip()
+
+        # Write the header line
+        hdr = ws.cell(row=current_row, column=col)
+        hdr.value = f"{number}. {header}:"
+        hdr.font  = Font(name="Arial", size=10, bold=True)
+        current_row += 1
+
+        # Wrap and write the description
+        for line in textwrap.wrap(description.strip(), width=100):
+            c = ws.cell(row=current_row, column=col)
+            c.value     = line
+            c.font      = Font(name="Arial", size=10)
+            c.alignment = Alignment(wrapText=True)
             current_row += 1
-            
-            # Write the wrapped description on subsequent lines
-            description = description.strip()
-            wrapped_lines = textwrap.wrap(description, width=100)
-            
-            for line in wrapped_lines:
-                desc_cell = ws.cell(row=current_row, column=col)
-                desc_cell.value = line
-                desc_cell.font = Font(name="Arial", size=10)
-                current_row += 1
-            
-            # Add a blank line between qualities
-            current_row += 1
 
-    # Set column width
+        # blank line
+        current_row += 1
+
+    # final formatting
     ws.column_dimensions[get_column_letter(col)].width = 110
-
-    # Remove gridlines
-    ws.sheet_view.showGridLines = False
-
-    # Optionally set column width so text fits nicely
-    ws.column_dimensions[get_column_letter(col)].width = 110
-
-    # Remove gridlines on this sheet if you prefer
     ws.sheet_view.showGridLines = False
 
 def write_industry_sheet(writer, final_output):
