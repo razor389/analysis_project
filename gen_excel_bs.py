@@ -1288,11 +1288,11 @@ def write_hist_pricing_sheet(writer, final_output):
             "format": '#,##0.0',
             "value_type": "earnings"
         },
-        # Top Right - P/S Ratio
-        "P/S Ratio": {
+        # Top Right - P/Assets Ratio
+        "P/Assets Ratio": {
             "low_key": "avg_ps_low",
             "high_key": "avg_ps_high",
-            "current_formula": f"='Analyses'!{first_new_year_col}11",  # References Sales/Share
+            "current_formula": f"='Analyses'!{first_new_year_col}22 / 'Analyses'!{first_new_year_col}16",  # References Sales/Share
             "start_row": 3,
             "start_col": 8,
             "format": '#,##0.00',
