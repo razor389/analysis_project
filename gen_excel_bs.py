@@ -969,7 +969,7 @@ def write_industry_sheet(writer, final_output):
     writer: ExcelWriter object
     final_output: Dictionary containing the full output data including industry statistics
     """
-    # Early return if qualities is None/null
+    # Early return if industry_comparison is None/null
     if not final_output.get("industry_comparison"):
         return
     
@@ -997,21 +997,19 @@ def write_industry_sheet(writer, final_output):
     op_stats_cell.border = thin_border
     
     # Get companies (tickers)
-    companies = industry_data["operatingStatistics"].keys()
+    companies = list(industry_data["operatingStatistics"].keys())
     
     # Define the operating statistics columns and their formats
     op_stats_columns = {
-        "Company": (2, None),  # Column B, no special format
+        "Company": (2, None),          # Column B, no special format
         "Debt(yrs.)": (4, '#,##0.0'),  # Column D
-        "Sales": (6, '#,##0'),  # Column F
-        "ROC": (8, '0.0%'),  # Column H
+        "Sales": (6, '#,##0'),         # Column F
+        "ROC": (8, '0.0%'),            # Column H
         "Operating Margin": (10, '0.0%')  # Column J
     }
 
-    # Write operating statistics headers and data
-    row = 5  # Start at row 5
-    
-    # Write headers
+    # Write operating statistics headers
+    row = 5
     for label, (col, _) in op_stats_columns.items():
         cell = ws.cell(row=row, column=col, value=label)
         cell.fill = label_fill
@@ -1019,33 +1017,52 @@ def write_industry_sheet(writer, final_output):
         cell.border = thin_border
         cell.alignment = center_alignment
 
-    # Write company data
-    for company in companies:
-        row += 1
-        # Write company name
-        company_cell = ws.cell(row=row, column=2, value=company)
-        company_cell.font = data_arial_font
-        company_cell.alignment = center_alignment
-        company_data = industry_data["operatingStatistics"][company]
-        
-        # Write operating statistics
-        col_mappings = {
-            "Debt(yrs.)": (4, "Debt(yrs.)"),
-            "Sales": (6, "Sales"),
-            "ROC": (8, "ROC"),
-            "Operating Margin": (10, "Operating Margin")
-        }
+    # Locate the most recent year column in Profit.Desc. (row 3, every 2 cols)
+    pd_col = None
+    om_row = None
+    if "Profit.Desc." in wb.sheetnames:
+        pd_ws = wb["Profit.Desc."]
+        c = 4
+        year_cols = []
+        while c <= pd_ws.max_column and pd_ws.cell(row=3, column=c).value is not None:
+            year_cols.append(c)
+            c += 2
+        if year_cols:
+            pd_col = year_cols[-1]
+        # Find the row for "Operating Margin:" in Profit.Desc.
+        for r in range(1, pd_ws.max_row + 1):
+            if pd_ws.cell(row=r, column=1).value == "Operating Margin:":
+                om_row = r
+                break
 
-        for label, (col, key) in col_mappings.items():
-            value = company_data[key]
-            cell = ws.cell(row=row, column=col, value=value)
+    # Write company data
+    for idx, company in enumerate(companies):
+        row += 1
+        # Company name
+        ws.cell(row=row, column=2, value=company).font = data_arial_font
+        ws.cell(row=row, column=2).alignment = center_alignment
+        company_data = industry_data["operatingStatistics"][company]
+
+        for label, (col, fmt) in op_stats_columns.items():
+            if label == "Company":
+                continue
+
+            # First company’s operating margin comes from Profit.Desc.
+            if idx == 0 and label == "Operating Margin" and pd_col and om_row:
+                col_letter = get_column_letter(pd_col+1)
+                formula = f"='Profit.Desc.'!{col_letter}{om_row}"
+                cell = ws.cell(row=row, column=col, value=formula)
+                cell.number_format = fmt
+            else:
+                value = company_data[label]
+                if label == "Sales":
+                    value = value / 1_000_000
+                cell = ws.cell(row=row, column=col, value=value)
+                if fmt:
+                    cell.number_format = fmt
+
             cell.font = data_arial_font
             cell.alignment = center_alignment
-            cell.number_format = op_stats_columns[label][1]
-
-            # Convert Sales to millions
-            if key == "Sales":
-                cell.value = value / 1_000_000
 
     last_op_stats_row = row
 
@@ -1056,16 +1073,15 @@ def write_industry_sheet(writer, final_output):
     market_stats_cell.font = label_font
     market_stats_cell.border = thin_border
 
-    # Define the market statistics columns and their formats
     market_stats_columns = {
-        "Company": (2, None),  # Column B, no special format
-        "P/B": (4, '#,##0.00'),  # Column D
-        "P/E": (6, '#,##0.0'),  # Column F
-        "Div. Yld.": (8, '0.00%'),  # Column H
-        "EV/Sales": (10, '#,##0.00')  # Column J
+        "Company": (2, None),
+        "P/B":      (4, '#,##0.00'),
+        "P/E":      (6, '#,##0.0'),
+        "Div. Yld.":(8, '0.00%'),
+        "EV/Sales": (10,'#,##0.00'),
     }
 
-    # Write market statistics headers
+    # Headers
     row = market_stats_start_row + 2
     for label, (col, _) in market_stats_columns.items():
         cell = ws.cell(row=row, column=col, value=label)
@@ -1074,33 +1090,27 @@ def write_industry_sheet(writer, final_output):
         cell.border = thin_border
         cell.alignment = center_alignment
 
-    # Write market statistics data
-    for company in companies:
+    # Data rows
+    for idx, company in enumerate(companies):
         row += 1
-        # Write company name
-        company_cell = ws.cell(row=row, column=2, value=company)
-        company_cell.font = data_arial_font
-        company_cell.alignment = center_alignment
-        company_data = industry_data["marketStatistics"][company]
-        
-        # Write market statistics
-        col_mappings = {
-            "P/B": (4, "P/B"),
-            "P/E": (6, "P/E"),
-            "Div. Yld.": (8, "Div. Yld."),
-            "EV/Sales": (10, "EV/Sales")
-        }
+        # Company name
+        ws.cell(row=row, column=2, value=company).font = data_arial_font
+        ws.cell(row=row, column=2).alignment = center_alignment
+        stats = industry_data["marketStatistics"][company]
 
-        for label, (col, key) in col_mappings.items():
-            value = company_data[key]
+        for label, (col, fmt) in market_stats_columns.items():
+            if label == "Company":
+                continue
+            value = stats[label]
             cell = ws.cell(row=row, column=col, value=value)
             cell.font = data_arial_font
             cell.alignment = center_alignment
-            cell.number_format = market_stats_columns[label][1]
+            if fmt:
+                cell.number_format = fmt
 
     # Adjust column widths
-    for col in range(1, 11):
-        ws.column_dimensions[get_column_letter(col)].width = 15
+    for c in range(1, 11):
+        ws.column_dimensions[get_column_letter(c)].width = 15
 
 def write_segmentation_sheet(writer, final_output):
     """
