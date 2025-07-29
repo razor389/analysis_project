@@ -1611,28 +1611,30 @@ def write_valuation_sheet(writer, final_output, ticker):
 
                 "Discount Rate:": 0.08,
 
-                "Capitalization Factor:": "=(H18-H10)",
+                "Growth Rate:": 0.05,
 
-                "Value of Float EOY10:": "=(H17/H19)",
+                "Capitalization Factor:": "=(H18-H19)",
+
+                "Value of Float EOY10:": "=(H17/H20)",
 
                 "RFR:": 0.06,
 
-                "PV at RFR:": "=PV(H21,10,,-H20)",
+                "PV at RFR:": "=PV(H22,10,,-H21)",
 
                 "Value of Insurance Equity:": f"='Co. Desc'!{first_forecast_col}19 * B4",
 
-                "Total Value:": "=(H22+H23)",
+                "Total Value:": "=(H23+H24)",
 
                 "Shares Outstanding:": f"='Co. Desc'!{first_forecast_col}16 * (1/B3)",
                 
                 # Share Value = Total Value / Shares Outstanding
-                "Per Share Value:": "=(H24 / H25)",
+                "Per Share Value:": "=(H25 / H26)",
                 
                 # Buy at => Share Value * Buy % (which is in H1)
-                "Buy At:": "=H26 * $H$3",
+                "Buy At:": "=H27 * $H$3",
                 
                 # Sell at => Share Value * Sell % (which is in H2)
-                "Sell At:": "=H26 * $H$4",
+                "Sell At:": "=H27 * $H$4",
             },
         }
     }
