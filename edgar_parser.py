@@ -219,6 +219,55 @@ class MetricsExtractor:
             return {"period": f"{year}-01-01 to {year}-12-31"}
         return {}
     
+    def is_consolidated_context(self, context) -> bool:
+        seg = context.find("segment")
+        if not seg:
+            return True
+
+        explicit = seg.find_all(lambda t: "explicitmember" in t.name.lower())
+        if not explicit:
+            return True
+
+        pairs = [(e.get("dimension", "").strip(), e.get_text(strip=True)) for e in explicit]
+
+        # --- BRK whitelist: treat Insurance & Other as consolidated for profit desc ---
+        ALLOWED_CONSOLIDATED_PAIRS = {
+            ("srt:ProductOrServiceAxis", "brka:InsuranceAndOtherMember"),
+            ("us-gaap:ProductOrServiceAxis", "brka:InsuranceAndOtherMember"),
+            # add any synonyms you encounter, e.g.:
+            ("srt:ProductOrServiceAxis", "brka:InsuranceAndOtherOperationsMember"),
+            ("us-gaap:ProductOrServiceAxis", "brka:InsuranceAndOtherOperationsMember"),
+        }
+        if any((dim, mem) in ALLOWED_CONSOLIDATED_PAIRS for dim, mem in pairs):
+            return True
+        # ---------------------------------------------------------------------------
+
+        BUSINESS_AXES = {
+            "us-gaap:StatementBusinessSegmentsAxis",
+            "us-gaap:SubsegmentsAxis",
+            "srt:ProductOrServiceAxis",
+            "srt:GeographicalAreasAxis",
+            "srt:MajorCustomersAxis",
+        }
+        if any(dim in BUSINESS_AXES for dim, _ in pairs):
+            return False
+
+        CONSOL_AXES = {"us-gaap:ConsolidationItemsAxis", "srt:ConsolidationItemsAxis"}
+        CONSOL_MEMBERS = {
+            "us-gaap:ConsolidatedEntitiesMember",
+            "srt:ConsolidatedEntitiesMember",
+            "us-gaap:ConsolidatedGroupMember",
+        }
+        has_consol_axis = any(dim in CONSOL_AXES for dim, _ in pairs)
+        if has_consol_axis and any(mem in CONSOL_MEMBERS for _, mem in pairs):
+            return True
+
+        if all(dim.endswith("LegalEntityAxis") for dim, _ in pairs):
+            return True
+
+        return False
+
+
     def process_mapping(self, soup, mapping):
         local = {}
         for metric_name, tag in mapping.items():
@@ -239,12 +288,13 @@ class MetricsExtractor:
                         logger.warning(f"Could not find context for ref: {context_ref}")
                         continue
                     
-                    # **CRITICAL FIX**: Check if the context contains a <segment> element. 
-                    # If it does, this fact is for a business segment, not the consolidated
-                    # entity, and we should skip it for this general mapping.
-                    if context.find("segment"):
+                    # OLD:
+                    # if context.find("segment"):
+                    #     continue
+
+                    # NEW:
+                    if not self.is_consolidated_context(context):
                         continue
-                    # ---- END OF MODIFICATION ----
 
                     numeric_value = float(elem.get_text(strip=True))
                     scale = elem.get("scale", "0")

@@ -167,6 +167,107 @@
           "retained_earnings", "unrealized_cap_gain", "hedges", "forex_adjustments"
         ]
       }
+    },
+    "BRK-B": {
+      "profit_desc_metrics": {
+        "gross_revenues": "us-gaap:PremiumsEarnedNet",
+        "investment_income": "brka:InvestmentIncomeInterestDividendAndOther",
+        "losses_and_expenses": "us-gaap:LiabilityForUnpaidClaimsAndClaimsAdjustmentExpenseIncurredClaims1",
+        "acquisition_costs": "us-gaap:CostOfGoodsAndServicesSold",
+        "underwriting_expenses": "brka:InsuranceUnderwritingExpenses",
+        "taxes": "us-gaap:IncomeTaxExpenseBenefit",
+        "interest_expenses": "us-gaap:InterestExpense"
+      },
+      "balance_sheet_metrics": {
+        "assets": "us-gaap:Assets",
+        "cash": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+        "fixed_income": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
+        "common_equities": "us-gaap:EquitySecuritiesFvNi",
+        "short_term": "us-gaap:ShortTermInvestments",
+        "loan_finance_receivable": "us-gaap:NotesReceivableNet",
+        "premiums_receivable": "us-gaap:PremiumsAndOtherReceivablesNet",
+        "inventories": "us-gaap:InventoryNet",
+        "equipment_held_for_lease": "us-gaap:PropertySubjectToOrAvailableForOperatingLeaseNet",
+        "property_and_equipment": "us-gaap:PropertyPlantAndEquipmentNet",
+        "goodwill": "us-gaap:Goodwill",
+        "intangibles": "us-gaap:IntangibleAssetsNetExcludingGoodwill",
+        "deferred_charges": "brka:UnamortizedDeferredChargesOnReinsuranceAssumed",
+        "other_assets": "us-gaap:OtherAssets",
+        "liabilities": "us-gaap:Liabilities",
+        "unearned_premiums": "us-gaap:UnearnedPremiums",
+        "unpaid_losses_property_casualty_liability": "us-gaap:LiabilityForClaimsAndClaimsAdjustmentExpensePropertyCasualtyLiability",
+        "unpaid_losses_retroactive_reinsurance": "us-gaap:LiabilityForClaimsAndClaimsAdjustmentExpensePropertyCasualtyLiability",
+        "life_annuity_health_benefits": "us-gaap:LiabilityForFuturePolicyBenefits",
+        "other_policy_liability": "us-gaap:PolicyholderFunds",
+        "accounts_payable": "us-gaap:AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent",
+        "debt": "us-gaap:DebtAndCapitalLeaseObligations",
+        "shareholders_equity": "us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+        "common_stock": "us-gaap:CommonStockValue",
+        "paid_in_capital": "us-gaap:AdditionalPaidInCapitalCommonStock",
+        "retained_earnings": "us-gaap:RetainedEarningsAccumulatedDeficit",
+        "treasury_stock_at_cost": "us-gaap:TreasuryStockValue"
+      },
+      "segmentation_mapping": {
+        "geico": {
+          "tag": "us-gaap:PremiumsEarnedNet",
+          "explicitMembers": {
+            "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+            "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
+            "us-gaap:SubsegmentsAxis": "brka:GeicoMember"
+          }
+        },
+        "brk_primary_group": {
+          "tag": "us-gaap:PremiumsEarnedNet",
+          "explicitMembers": {
+            "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+            "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
+            "us-gaap:SubsegmentsAxis": "brka:BerkshireHathawayPrimaryGroupMember"
+          }
+        },
+        "brk_reins_group": {
+          "tag": "us-gaap:PremiumsEarnedNet",
+          "explicitMembers": {
+            "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+            "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
+            "us-gaap:SubsegmentsAxis": "brka:BerkshireHathawayReinsuranceGroupMember"
+          }
+        }
+      },
+      "balance_sheet_categories": {
+        "assets": [
+          "assets",
+          "cash",
+          "fixed_income",
+          "common_equities",
+          "short_term",
+          "loan_finance_receivable",
+          "premiums_receivable",
+          "inventories",
+          "equipment_held_for_lease",
+          "property_and_equipment",
+          "goodwill",
+          "intangibles",
+          "deferred_charges",
+          "other_assets"
+        ],
+        "liabilities": [
+          "liabilities",
+          "unearned_premiums",
+          "unpaid_losses_property_casualty_liability",
+          "unpaid_losses_retroactive_reinsurance",
+          "life_annuity_health_benefits",
+          "other_policy_liability",
+          "accounts_payable",
+          "debt"
+        ],
+        "shareholders_equity": [
+          "shareholders_equity",
+          "common_stock",
+          "paid_in_capital",
+          "retained_earnings",
+          "treasury_stock_at_cost"
+        ]
+      }
     }
   }
   
