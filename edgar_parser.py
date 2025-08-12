@@ -270,52 +270,70 @@ class MetricsExtractor:
 
     def process_mapping(self, soup, mapping):
         local = {}
-        for metric_name, tag in mapping.items():
-            elems = soup.find_all(tag)
-            for elem in elems:
-                try:
-                    context_ref = elem.get("contextRef") or elem.get("contextref")
-                    if not context_ref:
+
+        def year_from_context_ref(context_ref):
+            context_data = self.parse_context(soup, context_ref)
+            period_text = context_data.get("period", "")
+            m = re.search(r"(\d{4})", period_text)
+            return m.group(1) if m else None
+
+        for metric_name, spec in mapping.items():
+            components = spec if isinstance(spec, list) else [spec]
+            totals = {}  # year -> sum
+
+            for comp in components:
+                if isinstance(comp, str):
+                    tag = comp
+                    required = None
+                else:
+                    tag = comp.get("tag")
+                    required = comp.get("explicitMembers", None)
+                    if not tag:
                         continue
 
-                    # ---- START OF MODIFICATION ----
-                    # Find the context associated with the fact
-                    context = soup.find("context", {"id": context_ref})
-                    if not context:
-                        # Use the fallback helper if the primary find fails
-                        context = find_context(soup, context_ref)
-                    if not context:
-                        logger.warning(f"Could not find context for ref: {context_ref}")
-                        continue
-                    
-                    # OLD:
-                    # if context.find("segment"):
-                    #     continue
+                elems = soup.find_all(tag)
+                for elem in elems:
+                    try:
+                        context_ref = elem.get("contextRef") or elem.get("contextref")
+                        if not context_ref:
+                            continue
+                        context = soup.find("context", {"id": context_ref}) or find_context(soup, context_ref)
+                        if not context:
+                            continue
 
-                    # NEW:
-                    if not self.is_consolidated_context(context):
+                        # Keep only consolidated contexts (but see whitelist in is_consolidated_context)
+                        if not self.is_consolidated_context(context):
+                            continue
+
+                        # If component requires explicit members, enforce them
+                        if required:
+                            seg = context.find("segment")
+                            if not seg:
+                                continue
+                            explicit = seg.find_all(lambda t: "explicitmember" in t.name.lower())
+                            pairs = {(e.get("dimension", "").strip(), e.get_text(strip=True)) for e in explicit}
+                            ok = all((dim, expected) in pairs for dim, expected in required.items())
+                            if not ok:
+                                continue
+
+                        val = float(elem.get_text(strip=True))
+                        scale = elem.get("scale") or elem.get("Scale") or "0"
+                        if scale and scale != "0":
+                            val *= 10 ** int(scale)
+
+                        year = year_from_context_ref(context_ref)
+                        if not year:
+                            continue
+                        totals[year] = totals.get(year, 0.0) + val
+                    except Exception as e:
+                        logger.error(f"Error processing {metric_name}: {e}")
                         continue
 
-                    numeric_value = float(elem.get_text(strip=True))
-                    scale = elem.get("scale", "0")
-                    if scale and scale != "0":
-                        numeric_value *= 10 ** int(scale)
-                    
-                    context_data = self.parse_context(soup, context_ref)
-                    period_text = context_data.get("period", "")
-                    if not period_text:
-                        continue
-                    year_match = re.search(r"(\d{4})", period_text)
-                    if not year_match:
-                        continue
-                    year = year_match.group(1)
-                    if year not in local:
-                        local[year] = {}
-                    local[year][metric_name] = numeric_value
-                except (ValueError, TypeError) as e:
-                    logger.error(f"Error processing {metric_name}: {e}")
-                    continue
+            for y, v in totals.items():
+                local.setdefault(y, {})[metric_name] = v
+
         return local
+
     
     def process_segmentation(self, soup):
         seg_results = {}

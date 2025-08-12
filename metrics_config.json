@@ -170,14 +170,28 @@
     },
     "BRK-B": {
       "profit_desc_metrics": {
-        "gross_revenues": "us-gaap:PremiumsEarnedNet",
-        "investment_income": "brka:InvestmentIncomeInterestDividendAndOther",
-        "losses_and_expenses": "us-gaap:LiabilityForUnpaidClaimsAndClaimsAdjustmentExpenseIncurredClaims1",
-        "acquisition_costs": "us-gaap:CostOfGoodsAndServicesSold",
-        "underwriting_expenses": "brka:InsuranceUnderwritingExpenses",
-        "taxes": "us-gaap:IncomeTaxExpenseBenefit",
-        "interest_expenses": "us-gaap:InterestExpense"
-      },
+          "gross_revenues": [
+            "us-gaap:PremiumsEarnedNet",
+            {
+              "tag": "us-gaap:Revenues",
+              "explicitMembers": {
+                "srt:ProductOrServiceAxis": "brka:RailroadUtilitiesAndEnergyMember"
+              }
+            },
+            {
+              "tag": "brka:SalesAndServiceRevenue",
+              "explicitMembers": {
+                "srt:ProductOrServiceAxis": "brka:InsuranceAndOtherMember"
+              }
+            }
+          ],
+          "investment_income": "brka:InvestmentIncomeInterestDividendAndOther",
+          "losses_and_expenses": "us-gaap:LiabilityForUnpaidClaimsAndClaimsAdjustmentExpenseIncurredClaims1",
+          "acquisition_costs": "us-gaap:CostOfGoodsAndServicesSold",
+          "underwriting_expenses": "brka:InsuranceUnderwritingExpenses",
+          "taxes": "us-gaap:IncomeTaxExpenseBenefit",
+          "interest_expenses": "us-gaap:InterestExpense"
+        },
       "balance_sheet_metrics": {
         "assets": "us-gaap:Assets",
         "cash": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
