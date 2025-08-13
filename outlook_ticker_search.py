@@ -4,7 +4,7 @@ import logging
 import sys
 from typing import List, Dict, Any, Set
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 from dotenv import load_dotenv
 
@@ -117,7 +117,7 @@ def filter_emails(messages, primary_ticker: str, search_terms: Set[str], lookbac
     processed_count = 0
     seen_emails = set()
     
-    cutoff_date = datetime.now() - timedelta(days=lookback_years * 365)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_years * 365)
 
     patterns = {term: re.compile(r'\b' + re.escape(term) + r'\b', re.IGNORECASE) 
                for term in search_terms}
