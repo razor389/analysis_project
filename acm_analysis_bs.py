@@ -829,6 +829,12 @@ def main():
                         help="Path to the metrics config file (JSON format)")
     parser.add_argument("--ignore_qualities", action="store_true",
                         help="Skip processing qualities analysis")
+    parser.add_argument(
+        '--email_lookback_years',
+        type=int,
+        default=15,
+        help='Number of years to look back when processing Outlook emails for qualities (default: 15)'
+    )
     args = parser.parse_args()
     
     ticker = args.ticker.upper()
@@ -967,7 +973,7 @@ def main():
 
         # Process qualities using the same function as in acm_analysis unless flag is set
         if not args.ignore_qualities:
-            qualities = process_qualities(ticker, ignore_qualities=args.ignore_qualities, debug=False)
+            qualities = process_qualities(ticker, ignore_qualities=args.ignore_qualities, debug=False, email_lookback_years=args.email_lookback_years)
         else:
             qualities = ""
 

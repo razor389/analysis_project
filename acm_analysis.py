@@ -1180,11 +1180,11 @@ def normalize_data(data, key=None):
         # For scalar values, format them using the current key context
         return format_number(data, key=key)
 
-def process_qualities(symbol, ignore_qualities=False, debug=False):
+def process_qualities(symbol, ignore_qualities=False, debug=False, email_lookback_years=15):
     if not ignore_qualities:
         # Fetch and filter data
         fetch_all_for_ticker(symbol)
-        filter_emails_by_config(symbol)
+        filter_emails_by_config(symbol, lookback_years=email_lookback_years)
         
         # Define filenames
         posts_filename = os.path.join("output", f"{symbol}_posts.json")
@@ -1244,6 +1244,12 @@ if __name__ == "__main__":
                        help='Use basic FMP segmentation instead of unified')
     parser.add_argument('--no_add_da', action='store_true',
                        help='When calculating EBITDA, do not add back depreciation and amortization')
+    parser.add_argument(
+        '--email_lookback_years',
+        type=int,
+        default=15,
+        help='Number of years to look back when processing Outlook emails for qualities (default: 15)'
+    )
     args = parser.parse_args()
 
     symbol = args.symbol.upper()
@@ -1395,7 +1401,7 @@ if __name__ == "__main__":
     }
 
     # Process qualities
-    qualities = process_qualities(symbol, ignore_qualities=ignore_qualities, debug=debug)
+    qualities = process_qualities(symbol, ignore_qualities=ignore_qualities, debug=debug, email_lookback_years=args.email_lookback_years)
     final_output["qualities"] = qualities
 
     rearranged_output = transform_final_output(final_output, stock_price=current_stock_price)

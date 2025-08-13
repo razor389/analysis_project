@@ -4,7 +4,7 @@ import logging
 import sys
 from typing import List, Dict, Any, Set
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 
@@ -109,13 +109,15 @@ def clean_message(raw_message: str) -> str:
 
     return cleaned.strip()
 
-def filter_emails(messages, primary_ticker: str, search_terms: Set[str]) -> List[Dict[str, Any]]:
+def filter_emails(messages, primary_ticker: str, search_terms: Set[str], lookback_years: int=15) -> List[Dict[str, Any]]:
     """
     Filter emails that contain any of the search terms in the subject line.
     """
     filtered_emails = []
     processed_count = 0
     seen_emails = set()
+    
+    cutoff_date = datetime.now() - timedelta(days=lookback_years * 365)
 
     patterns = {term: re.compile(r'\b' + re.escape(term) + r'\b', re.IGNORECASE) 
                for term in search_terms}
@@ -124,6 +126,10 @@ def filter_emails(messages, primary_ticker: str, search_terms: Set[str]) -> List
         try:
             if message.Class != 43:  # Skip non-mail items
                 continue
+
+            sent_time_dt = message.SentOn
+            if sent_time_dt < cutoff_date:
+                continue  # skip old emails
 
             subject = str(message.Subject).strip()
             
@@ -157,7 +163,7 @@ def filter_emails(messages, primary_ticker: str, search_terms: Set[str]) -> List
 
     return filtered_emails
 
-def filter_emails_by_config(ticker: str, config_path: str = 'ticker_email_config.json') -> str:
+def filter_emails_by_config(ticker: str, config_path: str = 'ticker_email_config.json', lookback_years: int=15) -> str:
     """
     Main function to filter sent emails by ticker and its related terms from config.
     If ticker not in config, searches for just the ticker symbol.
@@ -183,7 +189,7 @@ def filter_emails_by_config(ticker: str, config_path: str = 'ticker_email_config
         logging.info("No messages to process.")
         return ""
 
-    filtered_emails = filter_emails(messages, ticker, search_terms)
+    filtered_emails = filter_emails(messages, ticker, search_terms, lookback_years)
 
     if not filtered_emails:
         logging.info(f"No emails found containing any search terms for {ticker}")
