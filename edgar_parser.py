@@ -162,6 +162,8 @@ class MetricsExtractor:
             raise ValueError("A valid metrics configuration must be provided. Terminating.")
         
         # Extract required mappings from the config.
+        self.profit_rollups = (config.get("profit_rollups") or [])
+        self.suppress_profit_keys = set(config.get("suppress_profit_keys") or [])
         self.profit_desc_metrics = config.get("profit_desc_metrics")
         self.balance_sheet_metrics = config.get("balance_sheet_metrics")
         self.segmentation_mapping = config.get("segmentation_mapping")
@@ -187,7 +189,49 @@ class MetricsExtractor:
         )
         adapter = requests.adapters.HTTPAdapter(max_retries=retry_strategy)
         self.session.mount("https://", adapter)
-    
+
+    def _year_ok(self, ystr: str, rule: dict) -> bool:
+        try:
+            y = int(ystr)
+        except Exception:
+            return True  # if we can't parse year, don't block
+        if "year_gte" in rule and y < int(rule["year_gte"]): return False
+        if "year_lte" in rule and y > int(rule["year_lte"]): return False
+        if "years" in rule and isinstance(rule["years"], (list, tuple)) and y not in rule["years"]: return False
+        if "exclude_years" in rule and isinstance(rule["exclude_years"], (list, tuple)) and y in rule["exclude_years"]: return False
+        return True
+        
+    def _apply_profit_rollups(self, profit_data: dict) -> None:
+        """
+        Apply per-year rollups like:
+        - add/subtract intermediate keys into a target metric
+        - optional year filters: year_gte, year_lte, years (list), exclude_years (list)
+        Mutates profit_data in place.
+        """
+        if not self.profit_rollups:
+            return
+
+        for year, metrics in profit_data.items():
+            for rule in self.profit_rollups:
+                if not self._year_ok(year, rule):
+                    continue
+                target = rule.get("target")
+                adds = rule.get("add", []) or []
+                subs = rule.get("subtract", []) or []
+
+                delta = 0.0
+                for k in adds:
+                    v = metrics.get(k)
+                    if isinstance(v, (int, float)):
+                        delta += v
+                for k in subs:
+                    v = metrics.get(k)
+                    if isinstance(v, (int, float)):
+                        delta -= v
+
+                if target:
+                    metrics[target] = (metrics.get(target, 0.0) or 0.0) + delta
+
     def parse_context(self, soup, context_ref):
         logger.debug(f"Parsing context: {context_ref}")
         context = soup.find("context", {"id": context_ref})
@@ -230,17 +274,16 @@ class MetricsExtractor:
 
         pairs = [(e.get("dimension", "").strip(), e.get_text(strip=True)) for e in explicit]
 
-        # --- BRK whitelist: treat Insurance & Other as consolidated for profit desc ---
+        # --- BRK consolidated buckets on ProductOrServiceAxis ---
         ALLOWED_CONSOLIDATED_PAIRS = {
             ("srt:ProductOrServiceAxis", "brka:InsuranceAndOtherMember"),
             ("us-gaap:ProductOrServiceAxis", "brka:InsuranceAndOtherMember"),
-            # add any synonyms you encounter, e.g.:
-            ("srt:ProductOrServiceAxis", "brka:InsuranceAndOtherOperationsMember"),
-            ("us-gaap:ProductOrServiceAxis", "brka:InsuranceAndOtherOperationsMember"),
+            ("srt:ProductOrServiceAxis", "brka:RailroadUtilitiesAndEnergyMember"),
+            ("us-gaap:ProductOrServiceAxis", "brka:RailroadUtilitiesAndEnergyMember"),
         }
         if any((dim, mem) in ALLOWED_CONSOLIDATED_PAIRS for dim, mem in pairs):
             return True
-        # ---------------------------------------------------------------------------
+        # --------------------------------------------------------
 
         BUSINESS_AXES = {
             "us-gaap:StatementBusinessSegmentsAxis",
@@ -266,7 +309,6 @@ class MetricsExtractor:
             return True
 
         return False
-
 
     def process_mapping(self, soup, mapping):
         local = {}
@@ -301,7 +343,7 @@ class MetricsExtractor:
                         if not context:
                             continue
 
-                        # Keep only consolidated contexts (but see whitelist in is_consolidated_context)
+                        # Keep only consolidated contexts
                         if not self.is_consolidated_context(context):
                             continue
 
@@ -316,14 +358,21 @@ class MetricsExtractor:
                             if not ok:
                                 continue
 
+                        # Determine year from context
+                        year = year_from_context_ref(context_ref)
+                        if not year:
+                            continue
+
+                        # Honor per-component year filters if present
+                        if isinstance(comp, dict) and any(k in comp for k in ("year_gte","year_lte","years","exclude_years")):
+                            if not self._year_ok(year, comp):
+                                continue
+
                         val = float(elem.get_text(strip=True))
                         scale = elem.get("scale") or elem.get("Scale") or "0"
                         if scale and scale != "0":
                             val *= 10 ** int(scale)
 
-                        year = year_from_context_ref(context_ref)
-                        if not year:
-                            continue
                         totals[year] = totals.get(year, 0.0) + val
                     except Exception as e:
                         logger.error(f"Error processing {metric_name}: {e}")
@@ -410,6 +459,7 @@ class MetricsExtractor:
         results = {}
         
         profit_data = self.process_mapping(soup, self.profit_desc_metrics)
+        self._apply_profit_rollups(profit_data)
         balance_data = self.process_mapping(soup, self.balance_sheet_metrics)
         segmentation_data = self.process_segmentation(soup)
         
@@ -429,6 +479,13 @@ class MetricsExtractor:
                 },
                 "segmentation": segmentation_data.get(year, {})
             }
+            if year in profit_data:
+                # Optionally suppress internal keys
+                clean = {
+                    k: v for k, v in profit_data[year].items()
+                    if k not in self.suppress_profit_keys
+                }
+                results[year]["profit_desc"] = clean
             if year in balance_data:
                 for metric_name, value in balance_data[year].items():
                     assigned = False

@@ -688,7 +688,7 @@ def create_unified_year_output(year, fmp_data, sec_data):
     sec_profit = sec_data.get("profit_desc", {})
     premium_earned    = sec_profit.get("gross_revenues")
     benefit_claims    = sec_profit.get("losses_and_expenses")
-    acquisition_costs = sec_profit.get("acquisition_costs")
+    acquisition_costs = sec_profit.get("acquisition_costs", 0)
     underwriting_expenses = sec_profit.get("underwriting_expenses")
     taxes             = sec_profit.get("taxes")
     interest_expenses = sec_profit.get("interest_expenses")
