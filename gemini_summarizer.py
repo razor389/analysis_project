@@ -45,7 +45,14 @@ Requirements:
     )
     
     print("[GEMINI] ==> Calling the API...")
-    response = await model.generate_content_async([user_prompt])
+    from google.generativeai.types import GenerationConfig
+
+    generation_config = GenerationConfig(
+        response_mime_type="text/plain",  # force plain text output
+        temperature=0.5                   
+    )
+
+    response = await model.generate_content_async([user_prompt], generation_config=generation_config)
     print("[GEMINI] ==> Response received.")
     
     try:
