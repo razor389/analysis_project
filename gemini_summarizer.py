@@ -48,7 +48,18 @@ Requirements:
     response = await model.generate_content_async([user_prompt])
     print("[GEMINI] ==> Response received.")
     
-    summary_text = str(response.text.strip())
+    try:
+        # This is the safe way to access the text
+        summary_text = response.text.strip()
+    except ValueError:
+        # This block will execute if response.text fails (i.e., no content)
+        print("[GEMINI] ==> ERROR: Response was empty. The content was likely blocked.")
+        print(f"[GEMINI] ==> Prompt Feedback: {response.prompt_feedback}")
+        # You can also check the finish reason on the candidate if needed
+        print(f"[GEMINI] ==> Finish Reason: {response.candidates[0].finish_reason}")
+        print(f"[GEMINI] ==> Safety Ratings: {response.candidates[0].safety_ratings}")
+        return "Error: Summary generation failed because the response was blocked."
+    
     match = re.search(r'1\.\s+\*\*', summary_text)
 
     if match:
