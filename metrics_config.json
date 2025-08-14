@@ -176,14 +176,21 @@
         "losses_and_expenses": "us-gaap:LiabilityForUnpaidClaimsAndClaimsAdjustmentExpenseIncurredClaims1",
         "acquisition_costs": "us-gaap:CostOfGoodsAndServicesSold",
         "underwriting_expenses": "brka:InsuranceUnderwritingExpenses",
-        "taxes": "us-gaap:IncomeTaxExpenseBenefit",
-        "interest_expenses": "us-gaap:InterestExpense",
-
+        "interest_expenses": {
+          "tag": "us-gaap:InterestExpense",
+          "explicitMembers": { "srt:ProductOrServiceAxis": "brka:InsuranceAndOtherMember" },
+          "aggregate": "pick_one"
+        },
+        "taxes": {
+          "tag": "us-gaap:IncomeTaxExpenseBenefit",
+          "aggregate": "pick_one"
+        },
         "revenue_rue": {
           "tag": "us-gaap:Revenues",
           "explicitMembers": {
             "srt:ProductOrServiceAxis": "brka:RailroadUtilitiesAndEnergyMember"
-          }
+          },
+          "aggregate": "pick_one"
         },
         "cost_rue": {
           "tag": "us-gaap:CostsAndExpenses",

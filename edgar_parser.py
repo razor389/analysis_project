@@ -200,6 +200,35 @@ class MetricsExtractor:
         if "years" in rule and isinstance(rule["years"], (list, tuple)) and y not in rule["years"]: return False
         if "exclude_years" in rule and isinstance(rule["exclude_years"], (list, tuple)) and y in rule["exclude_years"]: return False
         return True
+    
+    NUMERIC_NEG_PAT = re.compile(r"^\(([\d,\.]+)\)$")
+
+    def _parse_numeric(self, elem):
+        raw = elem.get_text(strip=True)
+        if not raw:
+            return None
+        m = self.NUMERIC_NEG_PAT.match(raw)
+        if m:
+            raw = "-" + m.group(1)
+        raw = raw.replace(",", "")
+        try:
+            return float(raw)
+        except Exception:
+            return None
+        
+    def _debug_rollup(self, year, metrics, rule):
+        target = rule.get("target")
+        adds = rule.get("add", []) or []
+        subs = rule.get("subtract", []) or []
+        def gv(k): 
+            v = metrics.get(k)
+            return v if isinstance(v, (int, float)) else None
+        add_parts = [(k, gv(k)) for k in adds]
+        sub_parts = [(k, gv(k)) for k in subs]
+        logger.info(f"[rollup dbg] y={year} target={target} "
+                    f"base={gv(target)} "
+                    f"adds={add_parts} subs={sub_parts}")
+
         
     def _apply_profit_rollups(self, profit_data: dict) -> None:
         """
@@ -215,6 +244,8 @@ class MetricsExtractor:
             for rule in self.profit_rollups:
                 if not self._year_ok(year, rule):
                     continue
+                # DEBUG (remove after verifying):
+                # self._debug_rollup(year, metrics, rule)
                 target = rule.get("target")
                 adds = rule.get("add", []) or []
                 subs = rule.get("subtract", []) or []
@@ -319,17 +350,77 @@ class MetricsExtractor:
             m = re.search(r"(\d{4})", period_text)
             return m.group(1) if m else None
 
+        CONSOL_AXES = {"us-gaap:ConsolidationItemsAxis", "srt:ConsolidationItemsAxis"}
+        CONSOL_MEMBERS = {
+            "us-gaap:ConsolidatedEntitiesMember",
+            "srt:ConsolidatedEntitiesMember",
+            "us-gaap:ConsolidatedGroupMember",
+        }
+        BUSINESS_AXES = {
+            "us-gaap:StatementBusinessSegmentsAxis",
+            "us-gaap:SubsegmentsAxis",
+            "srt:ProductOrServiceAxis",
+            "srt:GeographicalAreasAxis",
+            "srt:MajorCustomersAxis",
+        }
+
+        def _segment_node(context):
+            seg = context.find("segment")
+            if seg is not None:
+                return seg
+            entity = context.find("entity")
+            return (entity.find("segment") if entity is not None else None)
+
+        def _pairs_for_context(context):
+            seg = _segment_node(context)
+            if not seg:
+                return []
+            explicit = seg.find_all(lambda t: "explicitmember" in t.name.lower())
+            return [(e.get("dimension", "").strip(), e.get_text(strip=True)) for e in explicit]
+
+        def _score_preference(pairs, required_pairs_set):
+            """
+            Higher is better. We prefer:
+            1) Explicit consolidated contexts
+            2) Fewer extra business axes beyond what's required
+            3) No StatementBusinessSegmentsAxis
+            """
+            score = 0
+            if any(dim in CONSOL_AXES and mem in CONSOL_MEMBERS for dim, mem in pairs):
+                score += 10
+            # count extra axes beyond required
+            extra = [(d, m) for (d, m) in pairs if (d, m) not in required_pairs_set]
+            # prefer fewer extras
+            score += max(0, 5 - len(extra))
+            # penalize SBS axis
+            if any(dim == "us-gaap:StatementBusinessSegmentsAxis" for dim, _ in pairs):
+                score -= 2
+            return score
+
         for metric_name, spec in mapping.items():
             components = spec if isinstance(spec, list) else [spec]
-            totals = {}  # year -> sum
+
+            # If the metric wrapper itself specifies aggregate, capture it;
+            # per-component setting overrides metric-level.
+            metric_aggregate = None
+            if isinstance(spec, dict):
+                metric_aggregate = spec.get("aggregate")
+
+            # For aggregation:
+            # - when we "sum", we keep totals[year]
+            # - when we "pick_one", we keep candidates[year] = list[(val, pairs, required_pairs_set)]
+            totals = {}
+            candidates = {}
 
             for comp in components:
                 if isinstance(comp, str):
                     tag = comp
                     required = None
+                    aggregate_mode = metric_aggregate or "sum"
                 else:
                     tag = comp.get("tag")
                     required = comp.get("explicitMembers", None)
+                    aggregate_mode = comp.get("aggregate", metric_aggregate or "sum")
                     if not tag:
                         continue
 
@@ -343,46 +434,70 @@ class MetricsExtractor:
                         if not context:
                             continue
 
-                        # Keep only consolidated contexts
+                        # Keep only consolidated contexts using your existing logic
                         if not self.is_consolidated_context(context):
                             continue
 
-                        # If component requires explicit members, enforce them
-                        if required:
-                            seg = context.find("segment")
-                            if not seg:
-                                continue
-                            explicit = seg.find_all(lambda t: "explicitmember" in t.name.lower())
-                            pairs = {(e.get("dimension", "").strip(), e.get_text(strip=True)) for e in explicit}
-                            ok = all((dim, expected) in pairs for dim, expected in required.items())
-                            if not ok:
-                                continue
+                        pairs = _pairs_for_context(context)
+                        pairs_set = set(pairs)
 
-                        # Determine year from context
+                        # Enforce required explicit members (if any). We must look under context.segment or entity.segment.
+                        if required:
+                            req_set = {(dim, expected) for dim, expected in required.items()}
+                            if not req_set.issubset(pairs_set):
+                                continue
+                            # (Optional robustness) Reject LegalEntityAxis to avoid per-subsidiary duplicates
+                            if any(dim.endswith("LegalEntityAxis") for dim, _ in pairs):
+                                continue
+                        else:
+                            req_set = set()
+
+                        # Determine year
                         year = year_from_context_ref(context_ref)
                         if not year:
                             continue
 
-                        # Honor per-component year filters if present
+                        # Respect any per-component year filters
                         if isinstance(comp, dict) and any(k in comp for k in ("year_gte","year_lte","years","exclude_years")):
                             if not self._year_ok(year, comp):
                                 continue
 
-                        val = float(elem.get_text(strip=True))
-                        scale = elem.get("scale") or elem.get("Scale") or "0"
-                        if scale and scale != "0":
-                            val *= 10 ** int(scale)
+                        # Parse number (no scale multiplication; Inline XBRL already encodes plain numbers textually)
+                        raw = elem.get_text(strip=True)
+                        if not raw:
+                            continue
+                        if raw.startswith("(") and raw.endswith(")"):
+                            raw = "-" + raw[1:-1]
+                        raw = raw.replace(",", "")
+                        try:
+                            val = float(raw)
+                        except Exception:
+                            continue
 
-                        totals[year] = totals.get(year, 0.0) + val
+                        if aggregate_mode == "pick_one":
+                            # store as candidate; we'll choose best per year
+                            candidates.setdefault(year, []).append((val, pairs, req_set))
+                        else:
+                            # default behavior: sum
+                            totals[year] = totals.get(year, 0.0) + val
+
                     except Exception as e:
                         logger.error(f"Error processing {metric_name}: {e}")
                         continue
 
+            # finalize: write chosen values for pick_one
+            for y, lst in candidates.items():
+                if not lst:
+                    continue
+                # score and pick the best candidate
+                chosen_val = max(lst, key=lambda t: (_score_preference(t[1], t[2]), abs(t[0])))[0]
+                local.setdefault(y, {})[metric_name] = chosen_val
+
+            # finalize: write sums
             for y, v in totals.items():
                 local.setdefault(y, {})[metric_name] = v
 
         return local
-
     
     def process_segmentation(self, soup):
         seg_results = {}
