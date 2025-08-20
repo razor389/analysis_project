@@ -380,7 +380,7 @@ class MetricsExtractor:
 
         def _score_preference(pairs, required_pairs_set):
             """
-            Higher is better. We prefer:
+            Higher is better. Prefer:
             1) Explicit consolidated contexts
             2) Fewer extra business axes beyond what's required
             3) No StatementBusinessSegmentsAxis
@@ -388,41 +388,63 @@ class MetricsExtractor:
             score = 0
             if any(dim in CONSOL_AXES and mem in CONSOL_MEMBERS for dim, mem in pairs):
                 score += 10
-            # count extra axes beyond required
             extra = [(d, m) for (d, m) in pairs if (d, m) not in required_pairs_set]
-            # prefer fewer extras
             score += max(0, 5 - len(extra))
-            # penalize SBS axis
             if any(dim == "us-gaap:StatementBusinessSegmentsAxis" for dim, _ in pairs):
                 score -= 2
             return score
 
+        def _parse_numeric(elem):
+            # Robust numeric parse with () negatives and optional @scale / @sign
+            raw = (elem.get_text(strip=True) or "").replace(",", "")
+            if not raw:
+                return None
+            if raw.startswith("(") and raw.endswith(")"):
+                raw = "-" + raw[1:-1]
+            try:
+                val = float(raw)
+            except Exception:
+                return None
+            scale = elem.get("scale") or elem.get("Scale") or "0"
+            if scale and scale != "0":
+                try:
+                    val *= 10 ** int(scale)
+                except Exception:
+                    pass
+            sign_attr = (elem.get("sign") or "").lower()
+            if sign_attr in {"-", "neg", "negative"}:
+                val = -abs(val)
+            return val
+
         for metric_name, spec in mapping.items():
             components = spec if isinstance(spec, list) else [spec]
 
-            # If the metric wrapper itself specifies aggregate, capture it;
-            # per-component setting overrides metric-level.
+            # We will ALWAYS accumulate into totals across components.
+            # Within each component we "pick one" context by default.
+            totals = {}  # year -> float
+
+            # Optional metric-level override (component-level still wins)
             metric_aggregate = None
             if isinstance(spec, dict):
                 metric_aggregate = spec.get("aggregate")
-
-            # For aggregation:
-            # - when we "sum", we keep totals[year]
-            # - when we "pick_one", we keep candidates[year] = list[(val, pairs, required_pairs_set)]
-            totals = {}
-            candidates = {}
 
             for comp in components:
                 if isinstance(comp, str):
                     tag = comp
                     required = None
-                    aggregate_mode = metric_aggregate or "sum"
+                    aggregate_mode = metric_aggregate or "pick_one"   # <-- default changed
+                    year_filter = None
                 else:
                     tag = comp.get("tag")
                     required = comp.get("explicitMembers", None)
-                    aggregate_mode = comp.get("aggregate", metric_aggregate or "sum")
+                    aggregate_mode = comp.get("aggregate", metric_aggregate or "pick_one")  # <-- default changed
+                    year_filter = comp  # we’ll read year_gte/year_lte/years/exclude_years from here
                     if not tag:
                         continue
+
+                # Gather candidates for THIS component, then pick one per year (or sum if explicitly requested)
+                comp_candidates = {}  # year -> [(val, pairs, req_set)]
+                comp_sums = {}        # year -> float (only used if aggregate_mode == "sum")
 
                 elems = soup.find_all(tag)
                 for elem in elems:
@@ -434,71 +456,61 @@ class MetricsExtractor:
                         if not context:
                             continue
 
-                        # Keep only consolidated contexts using your existing logic
+                        # Keep only consolidated contexts (your existing logic)
                         if not self.is_consolidated_context(context):
                             continue
 
                         pairs = _pairs_for_context(context)
                         pairs_set = set(pairs)
 
-                        # Enforce required explicit members (if any). We must look under context.segment or entity.segment.
+                        # Enforce required explicit members
                         if required:
                             req_set = {(dim, expected) for dim, expected in required.items()}
                             if not req_set.issubset(pairs_set):
                                 continue
-                            # (Optional robustness) Reject LegalEntityAxis to avoid per-subsidiary duplicates
+                            # Optional: avoid LegalEntityAxis duplicates when required members present
                             if any(dim.endswith("LegalEntityAxis") for dim, _ in pairs):
                                 continue
                         else:
                             req_set = set()
 
-                        # Determine year
+                        # Year + year filters
                         year = year_from_context_ref(context_ref)
                         if not year:
                             continue
-
-                        # Respect any per-component year filters
-                        if isinstance(comp, dict) and any(k in comp for k in ("year_gte","year_lte","years","exclude_years")):
-                            if not self._year_ok(year, comp):
+                        if isinstance(year_filter, dict) and any(k in year_filter for k in ("year_gte","year_lte","years","exclude_years")):
+                            if not self._year_ok(year, year_filter):
                                 continue
 
-                        # Parse number (no scale multiplication; Inline XBRL already encodes plain numbers textually)
-                        raw = elem.get_text(strip=True)
-                        if not raw:
-                            continue
-                        if raw.startswith("(") and raw.endswith(")"):
-                            raw = "-" + raw[1:-1]
-                        raw = raw.replace(",", "")
-                        try:
-                            val = float(raw)
-                        except Exception:
+                        val = _parse_numeric(elem)
+                        if val is None:
                             continue
 
-                        if aggregate_mode == "pick_one":
-                            # store as candidate; we'll choose best per year
-                            candidates.setdefault(year, []).append((val, pairs, req_set))
+                        if aggregate_mode == "sum":
+                            comp_sums[year] = comp_sums.get(year, 0.0) + val
                         else:
-                            # default behavior: sum
-                            totals[year] = totals.get(year, 0.0) + val
+                            comp_candidates.setdefault(year, []).append((val, pairs, req_set))
 
                     except Exception as e:
                         logger.error(f"Error processing {metric_name}: {e}")
                         continue
 
-            # finalize: write chosen values for pick_one
-            for y, lst in candidates.items():
-                if not lst:
-                    continue
-                # score and pick the best candidate
-                chosen_val = max(lst, key=lambda t: (_score_preference(t[1], t[2]), abs(t[0])))[0]
-                local.setdefault(y, {})[metric_name] = chosen_val
+                # Fold THIS component into metric totals
+                if aggregate_mode == "sum":
+                    for y, v in comp_sums.items():
+                        totals[y] = totals.get(y, 0.0) + v
+                else:
+                    for y, lst in comp_candidates.items():
+                        # pick ONE best context for this component/year
+                        chosen_val = max(lst, key=lambda t: (_score_preference(t[1], t[2]), abs(t[0])))[0]
+                        totals[y] = totals.get(y, 0.0) + chosen_val
 
-            # finalize: write sums
+            # Emit final metric values
             for y, v in totals.items():
                 local.setdefault(y, {})[metric_name] = v
 
         return local
-    
+
     def process_segmentation(self, soup):
         seg_results = {}
         for seg_key, seg_info in self.segmentation_mapping.items():
