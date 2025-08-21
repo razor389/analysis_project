@@ -264,7 +264,7 @@
         "liabilities": "us-gaap:Liabilities",
         "unearned_premiums": "us-gaap:UnearnedPremiums",
         "unpaid_losses_property_casualty_liability": "us-gaap:LiabilityForClaimsAndClaimsAdjustmentExpensePropertyCasualtyLiability",
-        "unpaid_losses_retroactive_reinsurance": "us-gaap:LiabilityForClaimsAndClaimsAdjustmentExpensePropertyCasualtyLiability",
+        "unpaid_losses_retroactive_reinsurance": "brka:LiabilityForUnpaidClaimsAndClaimAdjustmentExpenseRetroactiveReinsuranceContracts",
         "life_annuity_health_benefits": "us-gaap:LiabilityForFuturePolicyBenefits",
         "other_policy_liability": "us-gaap:PolicyholderFunds",
         "accounts_payable": "us-gaap:AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent",
