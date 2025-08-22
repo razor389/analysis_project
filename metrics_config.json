@@ -248,7 +248,10 @@
       ],
       "balance_sheet_metrics": {
         "assets": "us-gaap:Assets",
-        "cash": "us-gaap:CashAndCashEquivalentsAtCarryingValue",
+        "cash": [
+          { "tag": "us-gaap:CashAndCashEquivalentsAtCarryingValue", "aggregate": "pick_one" },
+          { "tag": "brka:USTreasuryBills", "aggregate": "pick_one" }
+        ],
         "fixed_income": "us-gaap:AvailableForSaleSecuritiesDebtSecurities",
         "common_equities": "us-gaap:EquitySecuritiesFvNi",
         "short_term": "us-gaap:ShortTermInvestments",
@@ -268,7 +271,18 @@
         "life_annuity_health_benefits": "us-gaap:LiabilityForFuturePolicyBenefits",
         "other_policy_liability": "us-gaap:PolicyholderFunds",
         "accounts_payable": "us-gaap:AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent",
-        "debt": "us-gaap:DebtAndCapitalLeaseObligations",
+        "debt": [
+          {
+            "tag": "us-gaap:DebtAndCapitalLeaseObligations",
+            "explicitMembers": { "srt:ProductOrServiceAxis": "brka:InsuranceAndOtherMember" },
+            "aggregate": "pick_one"
+          },
+          {
+            "tag": "us-gaap:DebtAndCapitalLeaseObligations",
+            "explicitMembers": { "srt:ProductOrServiceAxis": "brka:RailroadUtilitiesAndEnergyMember" },
+            "aggregate": "pick_one"
+          }
+        ],
         "shareholders_equity": "us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
         "common_stock": "us-gaap:CommonStockValue",
         "paid_in_capital": "us-gaap:AdditionalPaidInCapitalCommonStock",

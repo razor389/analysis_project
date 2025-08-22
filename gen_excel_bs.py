@@ -1244,6 +1244,7 @@ def write_segmentation_sheet(writer, final_output):
 def write_hist_pricing_sheet(writer, final_output):
     """
     Write the Historical Pricing sheet with average ratios and price implications in a 2x2 grid layout
+    Using formulas to calculate average low and high ratios based on historical data
     
     Parameters:
     writer: ExcelWriter object
@@ -1266,7 +1267,7 @@ def write_hist_pricing_sheet(writer, final_output):
     apply_table_border(ws, 1, 3, 6)
     title_fill_range(ws, 1, 3, 6)
 
-    # Get the first new year column letter from Co. Desc sheet for formulas
+    # Get all years from Co. Desc sheet for formulas
     sorted_years = sorted(final_output["company_description"]["data"].keys(), key=lambda x: int(x))
     if sorted_years:
         max_year = max(int(year) for year in sorted_years)
@@ -1275,24 +1276,53 @@ def write_hist_pricing_sheet(writer, final_output):
         first_new_year_col = get_column_letter(2 + len(sorted_years))
     else:
         first_new_year_col = "B"  # fallback
+    
+    # Get the range of historical years for our average calculations
+    first_hist_year_col = get_column_letter(2)  # Column B in Co. Desc
+    last_hist_year_col = get_column_letter(2 + len(sorted_years) - 1)  # Last historical year column
+
+    # Create column letter sequence for sumproduct formulas
+    col_letters = [get_column_letter(col) for col in range(2, 2 + len(sorted_years))]
+
+    # Helper function to create comma-separated formulas without escaping issues
+    def create_average_formula(numerator_cell, denominator_cell):
+        terms = []
+        for col in col_letters:
+            num_ref = f"'Co. Desc'!{col}{numerator_cell}"
+            denom_ref = f"'Co. Desc'!{col}{denominator_cell}" if denominator_cell.startswith('6') or denominator_cell.startswith('20') or denominator_cell.startswith('16') else f"'Analyses'!{col}{denominator_cell}"
+            terms.append(f"{num_ref}/{denom_ref}")
+        return f"=AVERAGE({','.join(terms)})"
+    
+    # Helper function for P/CF formula which is more complex
+    def create_pcf_formula(price_cell, profit_cell, depreciation_cell, shares_cell):
+        terms = []
+        for col in col_letters:
+            price_ref = f"'Co. Desc'!{col}{price_cell}"
+            profit_ref = f"'Co. Desc'!{col}{profit_cell}"
+            depr_ref = f"'Analyses'!{col}{depreciation_cell}"
+            shares_ref = f"'Co. Desc'!{col}{shares_cell}"
+            terms.append(f"{price_ref}/(({profit_ref}+{depr_ref})/{shares_ref})")
+        return f"=AVERAGE({','.join(terms)})"
 
     # Define the grid positions for each metric
     metrics = {
         # Top Left - P/E Ratio
         "P/E Ratio": {
-            "low_key": "avg_pe_low",
-            "high_key": "avg_pe_high",
+            # Fixed formula for average P/E ratio
+            "low_formula": create_average_formula("9", "6"),
+            "high_formula": create_average_formula("10", "6"),
             "current_formula": f"='Co. Desc'!{first_new_year_col}5",  # References diluted EPS
             "start_row": 3,
             "start_col": 2,
             "format": '#,##0.0',
             "value_type": "earnings"
         },
-        # Top Right - P/Assets Ratio
-        "P/Assets Ratio": {
-            "low_key": "avg_ps_low",
-            "high_key": "avg_ps_high",
-            "current_formula": f"='Analyses'!{first_new_year_col}22 / 'Analyses'!{first_new_year_col}16",  # References Sales/Share
+        # Top Right - P/S Ratio
+        "P/S Ratio": {
+            # Fixed formula for average P/S ratio
+            "low_formula": create_average_formula("9", "10"),
+            "high_formula": create_average_formula("10", "10"),
+            "current_formula": f"='Analyses'!{first_new_year_col}10",  # References Sales/Share
             "start_row": 3,
             "start_col": 8,
             "format": '#,##0.00',
@@ -1300,8 +1330,9 @@ def write_hist_pricing_sheet(writer, final_output):
         },
         # Bottom Left - P/B Ratio
         "P/B Ratio": {
-            "low_key": "avg_pb_low",
-            "high_key": "avg_pb_high",
+            # Fixed formula for average P/B ratio
+            "low_formula": create_average_formula("9", "20"),
+            "high_formula": create_average_formula("10", "20"),
             "current_formula": f"='Co. Desc'!{first_new_year_col}20",  # References Book Value/Share
             "start_row": 10,
             "start_col": 2,
@@ -1310,9 +1341,10 @@ def write_hist_pricing_sheet(writer, final_output):
         },
         # Bottom Right - P/CF Ratio
         "P/CF Ratio": {
-            "low_key": "avg_pcf_low",
-            "high_key": "avg_pcf_high",
-            "current_formula": f"=('Co. Desc'!{first_new_year_col}4+'Analyses'!{first_new_year_col}22)/'Co. Desc'!{first_new_year_col}16",  # (Net Profit + Depreciation) / Shares Outstanding
+            # Fixed formula for average P/CF ratio - need to divide each year's price by that year's cashflow per share
+            "low_formula": create_pcf_formula("9", "4", "23", "16"),
+            "high_formula": create_pcf_formula("10", "4", "23", "16"),
+            "current_formula": f"=('Co. Desc'!{first_new_year_col}4+'Analyses'!{first_new_year_col}23)/'Co. Desc'!{first_new_year_col}16",  # (Net Profit + Depreciation) / Shares Outstanding
             "start_row": 10,
             "start_col": 8,
             "format": '#,##0.00',
@@ -1335,12 +1367,12 @@ def write_hist_pricing_sheet(writer, final_output):
         
         # Write metric rows vertically
         metrics_data = [
-            ("Used", props["current_formula"]),  # Now using formula instead of value
-            ("Avg Low", hist_pricing.get(props["low_key"])),
-            ("Avg High", hist_pricing.get(props["high_key"]))
+            ("Used", props["current_formula"]),
+            ("Avg Low", props["low_formula"]),
+            ("Avg High", props["high_formula"])
         ]
         
-        for idx, (label, value) in enumerate(metrics_data):
+        for idx, (label, formula) in enumerate(metrics_data):
             # Write label
             label_cell = ws.cell(row=start_row + 1 + idx, column=start_col, value=label)
             label_cell.fill = label_fill
@@ -1348,13 +1380,8 @@ def write_hist_pricing_sheet(writer, final_output):
             label_cell.border = thin_border
             label_cell.alignment = center_alignment
             
-            # Write value or formula
-            if idx == 0:  # "Used" row
-                value_cell = ws.cell(row=start_row + 1 + idx, column=start_col + 1)
-                value_cell.value = value  # This is now a formula
-            else:
-                value_cell = ws.cell(row=start_row + 1 + idx, column=start_col + 1, value=value)
-            
+            # Write formula
+            value_cell = ws.cell(row=start_row + 1 + idx, column=start_col + 1, value=formula)
             value_cell.fill = data_fill
             value_cell.font = data_arial_font
             value_cell.border = thin_border
