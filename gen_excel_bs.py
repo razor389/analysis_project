@@ -1303,6 +1303,16 @@ def write_hist_pricing_sheet(writer, final_output):
             shares_ref = f"'Co. Desc'!{col}{shares_cell}"
             terms.append(f"{price_ref}/(({profit_ref}+{depr_ref})/{shares_ref})")
         return f"=AVERAGE({','.join(terms)})"
+    
+    def create_price_over_assets_ps_formula(price_row):
+        # Average over years:  Price / (Assets per Share)
+        # Assets/Share = 'Co. Desc'!{col}22 / 'Co. Desc'!{col}16
+        terms = []
+        for col in col_letters:
+            price_ref = f"'Co. Desc'!{col}{price_row}"
+            aps_ref   = f"('Co. Desc'!{col}22/'Co. Desc'!{col}16)"
+            terms.append(f"{price_ref}/{aps_ref}")
+        return f"=AVERAGE({','.join(terms)})"
 
     # Define the grid positions for each metric
     metrics = {
@@ -1317,16 +1327,17 @@ def write_hist_pricing_sheet(writer, final_output):
             "format": '#,##0.0',
             "value_type": "earnings"
         },
-        # Top Right - P/S Ratio
-        "P/S Ratio": {
-            # Fixed formula for average P/S ratio
-            "low_formula": create_average_formula("9", "10"),
-            "high_formula": create_average_formula("10", "10"),
-            "current_formula": f"='Analyses'!{first_new_year_col}10",  # References Sales/Share
+        # Top Right - P/Assets Ratio
+        "P/Assets Ratio": {
+            # Average of (Low Price / Assets per Share) and (High Price / Assets per Share)
+            "low_formula":  create_price_over_assets_ps_formula("9"),   # row 9 = Low Price
+            "high_formula": create_price_over_assets_ps_formula("10"),  # row 10 = High Price
+            # Current "Used" value is Assets per Share (Co. Desc row 22 / row 16) for the new-year column
+            "current_formula": f"='Co. Desc'!{first_new_year_col}22/'Co. Desc'!{first_new_year_col}16",
             "start_row": 3,
             "start_col": 8,
             "format": '#,##0.00',
-            "value_type": "sales"
+            "value_type": "assets_per_share"
         },
         # Bottom Left - P/B Ratio
         "P/B Ratio": {
