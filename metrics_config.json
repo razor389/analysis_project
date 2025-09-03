@@ -350,6 +350,114 @@
           "treasury_stock_at_cost"
         ]
       }
+    },
+    "EPD": {
+      "profit_desc_metrics": {
+        "gross_revenues":        { "tag": "us-gaap:Revenues",                            "aggregate": "pick_one" },
+
+        "investment_income":     { "tag": "us-gaap:InterestAndDividendIncomeNonoperating", "aggregate": "pick_one" },
+        "losses_and_expenses":   { "tag": "us-gaap:OperatingCostsAndExpenses",           "aggregate": "pick_one" },
+
+        "underwriting_expenses": { "tag": "us-gaap:GeneralAndAdministrativeExpense",     "aggregate": "pick_one" },
+
+        "taxes":                 { "tag": "us-gaap:IncomeTaxExpenseBenefit",             "aggregate": "pick_one" },
+        "interest_expenses":     { "tag": "us-gaap:InterestExpenseNonoperating",         "aggregate": "pick_one" }
+      },
+
+      "profit_rollups": [],
+      "suppress_profit_keys": [],
+
+      "balance_sheet_metrics": {
+        "assets":                  { "tag": "us-gaap:Assets",                               "aggregate": "pick_one" },
+        "cash":                    { "tag": "us-gaap:CashAndCashEquivalentsAtCarryingValue","aggregate": "pick_one" },
+        "accounts_receivable": [
+          {
+            "tag": "us-gaap:AccountsReceivableNetCurrent",
+            "explicitMembers": { "us-gaap:RelatedPartyTransactionsByRelatedPartyAxis": "us-gaap:NonrelatedPartyMember" },
+            "aggregate": "pick_one",
+            "year_gte": 2022
+          },
+          { "tag": "us-gaap:AccountsReceivableNetCurrent", "aggregate": "pick_one", "year_lte": 2021 }
+        ],
+        "inventories":             { "tag": "us-gaap:InventoryNet",                        "aggregate": "pick_one" },
+        "property_and_equipment":  { "tag": "us-gaap:PropertyPlantAndEquipmentNet",       "aggregate": "pick_one" },
+        "goodwill":                { "tag": "us-gaap:Goodwill",                            "aggregate": "pick_one" },
+        "intangibles":             { "tag": "us-gaap:IntangibleAssetsNetExcludingGoodwill","aggregate": "pick_one" },
+        "investments_in_affiliates": {
+          "tag": "us-gaap:InvestmentsInAffiliatesSubsidiariesAssociatesAndJointVentures",
+          "aggregate": "pick_one"
+        },
+        "other_assets":            { "tag": "us-gaap:OtherAssetsNoncurrent",               "aggregate": "pick_one" },
+
+        "liabilities":             { "tag": "us-gaap:Liabilities",                         "aggregate": "pick_one" }, 
+        "liabilities_current":     { "tag": "us-gaap:LiabilitiesCurrent",                  "aggregate": "pick_one" },
+        "long_term_debt_noncurrent": { "tag": "us-gaap:LongTermDebtNoncurrent",            "aggregate": "pick_one" },
+        "deferred_tax_liabilities":  { "tag": "us-gaap:DeferredIncomeTaxLiabilitiesNet",   "aggregate": "pick_one" },
+        "other_liabilities_noncurrent": { "tag": "us-gaap:OtherLiabilitiesNoncurrent",     "aggregate": "pick_one" },
+
+        "accounts_payable":        { "tag": "us-gaap:AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent", "aggregate": "pick_one" },
+        "debt":                    { "tag": "us-gaap:DebtAndCapitalLeaseObligations",      "aggregate": "pick_one" },
+
+        "shareholders_equity":     { "tag": "us-gaap:PartnersCapitalIncludingPortionAttributableToNoncontrollingInterest", "aggregate": "pick_one" }
+      },
+
+      "balance_sheet_rollups": [
+        {
+          "target": "liabilities",
+          "add": [
+            "liabilities_current",
+            "long_term_debt_noncurrent",
+            "deferred_tax_liabilities",
+            "other_liabilities_noncurrent"
+          ],
+          "subtract": ["liabilities"] 
+        }
+      ],
+
+      "segmentation_mapping": {
+        "ngl_pipelines_services": {
+          "tag": "us-gaap:Revenues",
+          "explicitMembers": { "us-gaap:StatementBusinessSegmentsAxis": "epd:NglPipelinesAndServicesMember" }
+        },
+        "crude_oil_pipelines_services": {
+          "tag": "us-gaap:Revenues",
+          "explicitMembers": { "us-gaap:StatementBusinessSegmentsAxis": "epd:OnshoreCrudeOilPipelinesAndServicesMember" }
+        },
+        "natural_gas_pipelines_services": {
+          "tag": "us-gaap:Revenues",
+          "explicitMembers": { "us-gaap:StatementBusinessSegmentsAxis": "epd:OnshoreNaturalGasPipelinesAndServicesMember" }
+        },
+        "petrochemical_refined_products_services": {
+          "tag": "us-gaap:Revenues",
+          "explicitMembers": { "us-gaap:StatementBusinessSegmentsAxis": "epd:PetrochemicalAndRefinedProductsServicesMember" }
+        }
+      },
+
+      "balance_sheet_categories": {
+        "assets": [
+          "assets",
+          "cash",
+          "accounts_receivable",
+          "inventories",
+          "property_and_equipment",
+          "goodwill",
+          "intangibles",
+          "investments_in_affiliates",
+          "other_assets"
+        ],
+        "liabilities": [
+          "liabilities",
+          "liabilities_current",
+          "long_term_debt_noncurrent",
+          "deferred_tax_liabilities",
+          "other_liabilities_noncurrent",
+          "accounts_payable",
+          "debt"
+        ],
+        "shareholders_equity": [
+          "shareholders_equity"
+        ]
+      }
     }
   }
   

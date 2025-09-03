@@ -168,6 +168,7 @@ class MetricsExtractor:
         self.balance_sheet_metrics = config.get("balance_sheet_metrics")
         self.segmentation_mapping = config.get("segmentation_mapping")
         self.balance_sheet_categories = config.get("balance_sheet_categories")
+        self.balance_sheet_rollups = config.get("balance_sheet_rollups") or []
         
         # Ensure all required config sections are present.
         if not (self.profit_desc_metrics and self.balance_sheet_metrics and 
@@ -263,6 +264,28 @@ class MetricsExtractor:
                 if target:
                     metrics[target] = (metrics.get(target, 0.0) or 0.0) + delta
 
+    def _apply_balance_rollups(self, balance_data: dict) -> None:
+        if not self.balance_sheet_rollups:
+            return
+        for year, metrics in balance_data.items():
+            for rule in self.balance_sheet_rollups:
+                if not self._year_ok(year, rule):
+                    continue
+                target = rule.get("target")
+                adds = rule.get("add", []) or []
+                subs = rule.get("subtract", []) or []
+                delta = 0.0
+                for k in adds:
+                    v = metrics.get(k)
+                    if isinstance(v, (int, float)):
+                        delta += v
+                for k in subs:
+                    v = metrics.get(k)
+                    if isinstance(v, (int, float)):
+                        delta -= v
+                if target:
+                    metrics[target] = (metrics.get(target, 0.0) or 0.0) + delta
+
     def parse_context(self, soup, context_ref):
         logger.debug(f"Parsing context: {context_ref}")
         context = soup.find("context", {"id": context_ref})
@@ -305,7 +328,22 @@ class MetricsExtractor:
 
         pairs = [(e.get("dimension", "").strip(), e.get_text(strip=True)) for e in explicit]
 
-        # --- BRK consolidated buckets on ProductOrServiceAxis ---
+        # NEW: treat these as neutral (don’t disqualify consolidation)
+        RELATED_PARTY_AXIS = "us-gaap:RelatedPartyTransactionsByRelatedPartyAxis"
+        NONRELATED_MEMBER  = "us-gaap:NonrelatedPartyMember"
+
+        # Drop neutral axes: LegalEntity and RelatedParty=Nonrelated
+        effective_pairs = []
+        for dim, mem in pairs:
+            if dim.endswith("LegalEntityAxis"):
+                continue
+            if dim == RELATED_PARTY_AXIS and mem == NONRELATED_MEMBER:
+                continue
+            effective_pairs.append((dim, mem))
+
+        # Use the remaining pairs for the original checks
+        pairs = effective_pairs
+
         ALLOWED_CONSOLIDATED_PAIRS = {
             ("srt:ProductOrServiceAxis", "brka:InsuranceAndOtherMember"),
             ("us-gaap:ProductOrServiceAxis", "brka:InsuranceAndOtherMember"),
@@ -314,7 +352,6 @@ class MetricsExtractor:
         }
         if any((dim, mem) in ALLOWED_CONSOLIDATED_PAIRS for dim, mem in pairs):
             return True
-        # --------------------------------------------------------
 
         BUSINESS_AXES = {
             "us-gaap:StatementBusinessSegmentsAxis",
@@ -332,9 +369,11 @@ class MetricsExtractor:
             "srt:ConsolidatedEntitiesMember",
             "us-gaap:ConsolidatedGroupMember",
         }
-        has_consol_axis = any(dim in CONSOL_AXES for dim, _ in pairs)
-        if has_consol_axis and any(mem in CONSOL_MEMBERS for _, mem in pairs):
+        if any(dim in CONSOL_AXES for dim, _ in pairs) and any(mem in CONSOL_MEMBERS for _, mem in pairs):
             return True
+
+        if effective_pairs == []:
+            return True  # only neutral axes were present
 
         if all(dim.endswith("LegalEntityAxis") for dim, _ in pairs):
             return True
@@ -513,56 +552,151 @@ class MetricsExtractor:
 
     def process_segmentation(self, soup):
         seg_results = {}
+
+        CONSOL_AXES = {"us-gaap:ConsolidationItemsAxis", "srt:ConsolidationItemsAxis"}
+        CONSOL_MEMBERS = {
+            "us-gaap:ConsolidatedEntitiesMember",
+            "srt:ConsolidatedEntitiesMember",
+            "us-gaap:ConsolidatedGroupMember",
+            "us-gaap:OperatingSegmentsMember",
+        }
+        BUSINESS_AXES = {
+            "us-gaap:StatementBusinessSegmentsAxis",
+            "us-gaap:SubsegmentsAxis",
+            "srt:ProductOrServiceAxis",
+            "srt:GeographicalAreasAxis",
+            "srt:MajorCustomersAxis",
+        }
+        RELATED_PARTY_AXES = {"us-gaap:RelatedPartyTransactionsByRelatedPartyAxis"}  # NEW
+
+        def _segment_node(context):
+            seg = context.find("segment")
+            if seg is not None:
+                return seg
+            ent = context.find("entity")
+            return ent.find("segment") if ent is not None else None
+
+        def _pairs_for_context(context):
+            seg = _segment_node(context)
+            if not seg:
+                return []
+            explicit = seg.find_all(lambda t: "explicitmember" in t.name.lower())
+            return [(e.get("dimension", "").strip(), e.get_text(strip=True)) for e in explicit]
+
+        def _duration_days(context):
+            period = context.find("period")
+            if not period:
+                return None
+            start = period.find("startDate")
+            end = period.find("endDate")
+            if not (start and end):
+                return None
+            try:
+                from datetime import date
+                return (date.fromisoformat(end.text.strip()) -
+                        date.fromisoformat(start.text.strip())).days
+            except Exception:
+                return None
+
+        def _year_from_context_ref(context_ref):
+            ctx = self.parse_context(soup, context_ref)
+            m = re.search(r"(\d{4})", ctx.get("period", ""))
+            return m.group(1) if m else None
+
+        def _strict_accept(pairs, required):
+            """
+            Accept ONLY contexts that:
+            • contain all required (dim, member) pairs
+            • contain NO extra business axes, consolidation axes, or related-party axes
+            • contain NO LegalEntityAxis (subsidiary dupes)
+            • contain NO IntersegmentEliminationMember
+            """
+            req_set = {(d, m) for d, m in required.items()}
+            pairs_set = set(pairs)
+            if not req_set.issubset(pairs_set):
+                return False
+
+            # Reject subsidiary-level dupes
+            if any(dim.endswith("LegalEntityAxis") for dim, _ in pairs):
+                return False
+
+            # Reject intersegment eliminations outright
+            if any(mem == "us-gaap:IntersegmentEliminationMember" for _, mem in pairs):
+                return False
+
+            # CHANGED: reject any extra axes in these families unless explicitly required
+            req_dims = {d for d, _ in req_set}
+            for dim, _ in pairs:
+                if (dim in BUSINESS_AXES or dim in CONSOL_AXES or dim in RELATED_PARTY_AXES) and dim not in req_dims:
+                    return False
+
+            return True
+
+        def _score(pairs, days):
+            # CHANGED: do NOT reward consolidation axes; prefer fewer axes + annual duration
+            score = 0
+            if days is not None and 360 <= days <= 370:
+                score += 3
+            score += max(0, 5 - len(pairs))
+            return score
+
         for seg_key, seg_info in self.segmentation_mapping.items():
             tag = seg_info["tag"]
-            required = seg_info["explicitMembers"]
-            elems = soup.find_all(tag)
-            for elem in elems:
+            required = seg_info.get("explicitMembers", {}) or {}
+
+            best_by_year = {}
+            seen = set()  # (contextRef, tag, raw_text)
+
+            for elem in soup.find_all(tag):
                 try:
                     context_ref = elem.get("contextRef") or elem.get("contextref")
                     if not context_ref:
                         continue
-                    context = soup.find("context", {"id": context_ref})
+                    raw = elem.get_text(strip=True)
+                    if not raw:
+                        continue
+                    sig = (context_ref, tag, raw)
+                    if sig in seen:
+                        continue
+                    seen.add(sig)
+
+                    context = soup.find("context", {"id": context_ref}) or find_context(soup, context_ref)
                     if not context:
                         continue
-                    entity = context.find("entity")
-                    if not entity:
+
+                    pairs = _pairs_for_context(context)
+                    if not _strict_accept(pairs, required):
                         continue
-                    segment = entity.find("segment")
-                    if not segment:
+
+                    year = _year_from_context_ref(context_ref)
+                    if not year:
                         continue
-                    explicit_members = segment.find_all(lambda t: "explicitmember" in t.name.lower())
-                    criteria_met = True
-                    for dim, expected in required.items():
-                        match_found = any(
-                            (exp.get("dimension") == dim and exp.get_text(strip=True) == expected)
-                            for exp in explicit_members
-                        )
-                        if not match_found:
-                            criteria_met = False
-                            break
-                    if not criteria_met:
+
+                    txt = raw.replace(",", "")
+                    if txt.startswith("(") and txt.endswith(")"):
+                        txt = "-" + txt[1:-1]
+                    try:
+                        val = float(txt)
+                    except Exception:
                         continue
-                    numeric_value = float(elem.get_text(strip=True))
-                    scale = elem.get("scale", "0")
-                    if scale and scale != "0":
-                        numeric_value *= 10 ** int(scale)
-                    context_data = self.parse_context(soup, context_ref)
-                    period_text = context_data.get("period", "")
-                    if not period_text:
-                        continue
-                    year_match = re.search(r"(\d{4})", period_text)
-                    if not year_match:
-                        continue
-                    year = year_match.group(1)
-                    if year not in seg_results:
-                        seg_results[year] = {}
-                    seg_results[year][seg_key] = seg_results[year].get(seg_key, 0) + numeric_value
+
+                    days = _duration_days(context)
+                    score = _score(pairs, days)
+
+                    prev = best_by_year.get(year)
+                    cand = (score, abs(val), val)
+                    if prev is None or (cand[0] > prev["rank"][0]) or (cand[0] == prev["rank"][0] and cand[1] > prev["rank"][1]):
+                        best_by_year[year] = {"val": val, "rank": cand}
+
                 except Exception as e:
                     logger.error(f"Error processing segmentation {seg_key}: {e}")
                     continue
+
+            for y, rec in best_by_year.items():
+                seg_results.setdefault(y, {})[seg_key] = rec["val"]
+
         return seg_results
-    
+        
     def extract_metrics(self, xml_url: str) -> dict:
         max_retries = 3
         attempt = 0
@@ -588,6 +722,7 @@ class MetricsExtractor:
         profit_data = self.process_mapping(soup, self.profit_desc_metrics)
         self._apply_profit_rollups(profit_data)
         balance_data = self.process_mapping(soup, self.balance_sheet_metrics)
+        self._apply_balance_rollups(balance_data)
         segmentation_data = self.process_segmentation(soup)
         
         # Retrieve balance_sheet_categories configuration from the config.
