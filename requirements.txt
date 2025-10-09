@@ -6,3 +6,6 @@ requests
 openai
 pywin32
 anthropic
+google-generativeai
+urllib3
+beautifulsoup4
