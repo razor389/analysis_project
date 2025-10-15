@@ -6,6 +6,8 @@ import json
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+import time
+import requests
 
 # Load environment variables from .env
 load_dotenv()
@@ -125,33 +127,63 @@ def fetch_all_for_ticker(input_ticker):
     
     # We'll collect unique posts in a dict keyed by postId
     unique_posts = {}
-
-    # Track topic IDs we've already handled
     seen_topics = set()
 
-    # For each category, fetch topics -> posts
     for cat in relevant_categories:
         cat_id = cat["categoryId"]
         cat_title = cat["title"]
-        topics_data = get_topics_for_category(cat_id)
-        topics_list = topics_data.get("data", [])
 
+        # Try to fetch topics with retries
+        for attempt in range(3):
+            try:
+                topics_data = get_topics_for_category(cat_id)
+                break  # success, exit retry loop
+            except requests.exceptions.RequestException as e:
+                print(f"⚠️  Error fetching topics for '{cat_title}' (ID={cat_id}): {e}")
+                if attempt < 2:
+                    wait = 2 ** attempt
+                    print(f"   Retrying in {wait} seconds...")
+                    time.sleep(wait)
+                else:
+                    print(f"❌  Giving up on category '{cat_title}' after 3 attempts.")
+                    topics_data = None
+
+        # Skip this category if it failed all retries
+        if not topics_data:
+            continue
+
+        topics_list = topics_data.get("data", [])
         print(f"Category '{cat_title}' (ID={cat_id}) -> {len(topics_list)} topic(s).")
 
         for topic in topics_list:
             topic_id = topic.get("topicId")
             topic_title = topic.get("title")
 
-            # Skip if we've already seen this topic ID
+            # Skip duplicate topics
             if topic_id in seen_topics:
                 print(f"  Skipping duplicate topic '{topic_title}' (ID={topic_id})")
                 continue
             seen_topics.add(topic_id)
 
-            # Proceed with fetching posts only once per topic
-            posts_data = get_posts_for_topic(topic_id)
-            posts_list = posts_data.get("data", [])
+            # Fetch posts with retry
+            for attempt in range(3):
+                try:
+                    posts_data = get_posts_for_topic(topic_id)
+                    break
+                except requests.exceptions.RequestException as e:
+                    print(f"⚠️  Error fetching posts for topic '{topic_title}' (ID={topic_id}): {e}")
+                    if attempt < 2:
+                        wait = 2 ** attempt
+                        print(f"   Retrying in {wait} seconds...")
+                        time.sleep(wait)
+                    else:
+                        print(f"❌  Giving up on topic '{topic_title}' after 3 attempts.")
+                        posts_data = None
 
+            if not posts_data:
+                continue
+
+            posts_list = posts_data.get("data", [])
             print(f"  Topic '{topic_title}' (ID={topic_id}) -> {len(posts_list)} post(s).")
 
             for post in posts_list:
