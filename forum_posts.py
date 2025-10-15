@@ -126,6 +126,9 @@ def fetch_all_for_ticker(input_ticker):
     # We'll collect unique posts in a dict keyed by postId
     unique_posts = {}
 
+    # Track topic IDs we've already handled
+    seen_topics = set()
+
     # For each category, fetch topics -> posts
     for cat in relevant_categories:
         cat_id = cat["categoryId"]
@@ -139,12 +142,18 @@ def fetch_all_for_ticker(input_ticker):
             topic_id = topic.get("topicId")
             topic_title = topic.get("title")
 
+            # Skip if we've already seen this topic ID
+            if topic_id in seen_topics:
+                print(f"  Skipping duplicate topic '{topic_title}' (ID={topic_id})")
+                continue
+            seen_topics.add(topic_id)
+
+            # Proceed with fetching posts only once per topic
             posts_data = get_posts_for_topic(topic_id)
             posts_list = posts_data.get("data", [])
 
             print(f"  Topic '{topic_title}' (ID={topic_id}) -> {len(posts_list)} post(s).")
 
-            # Collect each post
             for post in posts_list:
                 post_id = post.get("postId")
                 if post_id not in unique_posts:
