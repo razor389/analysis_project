@@ -133,59 +133,57 @@ def fetch_all_for_ticker(input_ticker):
         cat_id = cat["categoryId"]
         cat_title = cat["title"]
 
-        # Try to fetch topics with retries
+        # --- Fetch topics with retry (even on 400) ---
+        topics_data = None
         for attempt in range(3):
             try:
                 topics_data = get_topics_for_category(cat_id)
-                break  # success, exit retry loop
+                break  # success
             except requests.exceptions.RequestException as e:
-                print(f"⚠️  Error fetching topics for '{cat_title}' (ID={cat_id}): {e}")
+                print(f"⚠️  Error fetching topics for '{cat_title}' (ID={cat_id}) [Attempt {attempt+1}/3]: {e}")
                 if attempt < 2:
                     wait = 2 ** attempt
                     print(f"   Retrying in {wait} seconds...")
                     time.sleep(wait)
                 else:
-                    print(f"❌  Giving up on category '{cat_title}' after 3 attempts.")
-                    topics_data = None
-
-        # Skip this category if it failed all retries
+                    print(f"❌  Giving up on category '{cat_title}' (ID={cat_id}) after 3 failed attempts.")
         if not topics_data:
-            continue
+            continue  # skip to next category
 
         topics_list = topics_data.get("data", [])
         print(f"Category '{cat_title}' (ID={cat_id}) -> {len(topics_list)} topic(s).")
 
+        # --- Loop over topics ---
         for topic in topics_list:
             topic_id = topic.get("topicId")
             topic_title = topic.get("title")
 
-            # Skip duplicate topics
             if topic_id in seen_topics:
                 print(f"  Skipping duplicate topic '{topic_title}' (ID={topic_id})")
                 continue
             seen_topics.add(topic_id)
 
-            # Fetch posts with retry
+            # --- Fetch posts with retry (even on 400) ---
+            posts_data = None
             for attempt in range(3):
                 try:
                     posts_data = get_posts_for_topic(topic_id)
                     break
                 except requests.exceptions.RequestException as e:
-                    print(f"⚠️  Error fetching posts for topic '{topic_title}' (ID={topic_id}): {e}")
+                    print(f"⚠️  Error fetching posts for topic '{topic_title}' (ID={topic_id}) [Attempt {attempt+1}/3]: {e}")
                     if attempt < 2:
                         wait = 2 ** attempt
                         print(f"   Retrying in {wait} seconds...")
                         time.sleep(wait)
                     else:
-                        print(f"❌  Giving up on topic '{topic_title}' after 3 attempts.")
-                        posts_data = None
-
+                        print(f"❌  Giving up on topic '{topic_title}' (ID={topic_id}) after 3 failed attempts.")
             if not posts_data:
-                continue
+                continue  # skip to next topic
 
             posts_list = posts_data.get("data", [])
             print(f"  Topic '{topic_title}' (ID={topic_id}) -> {len(posts_list)} post(s).")
 
+            # --- Collect posts ---
             for post in posts_list:
                 post_id = post.get("postId")
                 if post_id not in unique_posts:
