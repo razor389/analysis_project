@@ -113,6 +113,16 @@ def fetch_all_for_ticker(input_ticker):
     # Combine parent + subcategories
     relevant_categories = [parent_cat] + subcategories
 
+    # --- Deduplicate category list to avoid duplicate topic fetches ---
+    seen_ids = set()
+    unique_categories = []
+    for cat in relevant_categories:
+        cid = cat["categoryId"]
+        if cid not in seen_ids:
+            unique_categories.append(cat)
+            seen_ids.add(cid)
+    relevant_categories = unique_categories
+    
     # We'll collect unique posts in a dict keyed by postId
     unique_posts = {}
 
