@@ -2,6 +2,7 @@
 
 import os
 import json
+import time
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -69,14 +70,12 @@ def get_posts_for_topic(topic_id):
 
     response = requests.get(url, headers=HEADERS, params=params)
 
-    # WebsiteToolbox uses 400 for restricted/invalid topics
     if response.status_code == 400:
         print(f"Skipping topic {topic_id}: API returned 400")
         return {"data": []}
 
     response.raise_for_status()
 
-    # Guard against empty body
     if not response.content:
         return {"data": []}
 
@@ -126,17 +125,39 @@ def fetch_all_for_ticker(input_ticker):
     subcategories = get_subcategories(all_categories, parent_id)
     print(f"Found {len(subcategories)} subcategory(ies) under '{ticker}'.")
 
+    # Combine and deduplicate categories
     relevant_categories = [parent_cat] + subcategories
+    seen_ids = set()
+    unique_categories = []
+    for cat in relevant_categories:
+        cid = cat["categoryId"]
+        if cid not in seen_ids:
+            unique_categories.append(cat)
+            seen_ids.add(cid)
+    relevant_categories = unique_categories
+
     unique_posts = {}
+    seen_topics = set()
 
     for cat in relevant_categories:
         cat_id = cat["categoryId"]
         cat_title = cat["title"]
 
-        try:
-            topics_data = get_topics_for_category(cat_id)
-        except requests.HTTPError as e:
-            print(f"Skipping category '{cat_title}' (ID={cat_id}): {e}")
+        # Fetch topics with retry
+        topics_data = None
+        for attempt in range(3):
+            try:
+                topics_data = get_topics_for_category(cat_id)
+                break
+            except requests.exceptions.RequestException as e:
+                print(
+                    f"Error fetching topics for '{cat_title}' (ID={cat_id}) "
+                    f"[Attempt {attempt + 1}/3]: {e}"
+                )
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+
+        if not topics_data:
             continue
 
         topics_list = topics_data.get("data", [])
@@ -146,10 +167,25 @@ def fetch_all_for_ticker(input_ticker):
             topic_id = topic.get("topicId")
             topic_title = topic.get("title")
 
-            try:
-                posts_data = get_posts_for_topic(topic_id)
-            except requests.HTTPError as e:
-                print(f"Skipping topic '{topic_title}' (ID={topic_id}): {e}")
+            if topic_id in seen_topics:
+                continue
+            seen_topics.add(topic_id)
+
+            # Fetch posts with retry
+            posts_data = None
+            for attempt in range(3):
+                try:
+                    posts_data = get_posts_for_topic(topic_id)
+                    break
+                except requests.exceptions.RequestException as e:
+                    print(
+                        f"Error fetching posts for topic '{topic_title}' "
+                        f"(ID={topic_id}) [Attempt {attempt + 1}/3]: {e}"
+                    )
+                    if attempt < 2:
+                        time.sleep(2 ** attempt)
+
+            if not posts_data:
                 continue
 
             posts_list = posts_data.get("data", [])
