@@ -22,6 +22,8 @@ load_dotenv()
 
 # Get sender email from environment variables
 SENDER_EMAIL = os.getenv('SENDER_EMAIL')
+EXCLUDED_EMAIL = "derekr@academycapitalmgmt.com".lower()
+
 if not SENDER_EMAIL:
     logging.error("SENDER_EMAIL not found in .env file")
     sys.exit(1)
@@ -75,6 +77,31 @@ def fetch_sent_emails(namespace):
     except Exception as e:
         logging.error(f"Error fetching sent emails: {e}")
         return []
+    
+def email_contains_excluded_address(message, excluded_email: str) -> bool:
+    """
+    Returns True if the excluded email appears as sender or recipient
+    (To, CC, or BCC) in the message.
+    """
+    try:
+        fields = []
+
+        # Sender
+        if hasattr(message, "SenderEmailAddress") and message.SenderEmailAddress:
+            fields.append(message.SenderEmailAddress)
+
+        # Recipients (To / CC / BCC)
+        if hasattr(message, "Recipients"):
+            for recipient in message.Recipients:
+                if hasattr(recipient, "Address") and recipient.Address:
+                    fields.append(recipient.Address)
+
+        combined = " ".join(fields).lower()
+        return excluded_email in combined
+
+    except Exception:
+        # If anything goes wrong, fail closed and exclude the message
+        return True
 
 def is_valid_search_term(term: str) -> bool:
     """
@@ -125,6 +152,9 @@ def filter_emails(messages, primary_ticker: str, search_terms: Set[str], lookbac
     for message in messages:
         try:
             if message.Class != 43:  # Skip non-mail items
+                continue
+
+            if email_contains_excluded_address(message, EXCLUDED_EMAIL):
                 continue
 
             sent_time_dt = message.SentOn
