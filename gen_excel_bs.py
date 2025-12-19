@@ -1445,6 +1445,59 @@ def write_hist_pricing_sheet(writer, final_output):
         ws.column_dimensions[get_column_letter(base_col)].width = 12      # Labels
         ws.column_dimensions[get_column_letter(base_col + 1)].width = 20  # Values
 
+    # 3 qualitative rows (rows 17–19)
+    qual_rows = [
+        (17, "Are there strong feelings about this company?"),
+        (18, "Are these feelings positive or negative?"),
+        (19, "How could these feelings cloud judgment?"),
+    ]
+
+    thin = Side(style="thin")
+
+    # Left question block spans B:F (2..6)
+    q_cols = range(2, 7)          # B..F
+    # Right answer block spans H:I (8..9) but H17:H19 should be blank
+    a_cols = range(8, 10)         # H..I
+
+    q_align = Alignment(horizontal="left", vertical="center", wrap_text=False)
+    a_align = Alignment(horizontal="left", vertical="center", wrap_text=False)
+
+    for r, question in qual_rows:
+        # Question area (B:F)
+        for c in q_cols:
+            cell = ws.cell(row=r, column=c)
+            if c == 2:  # put text in column B only
+                cell.value = question
+
+            cell.fill = label_fill
+            cell.font = label_font
+            cell.alignment = q_align
+
+            # Outer border only (no internal vertical borders)
+            cell.border = Border(
+                left=thin if c == 2 else Side(style=None),
+                right=thin if c == 6 else Side(style=None),
+                top=thin,
+                bottom=thin,
+            )
+
+        # Answer area (H:I) with BLANK values in H17:H19 (and keep I blank too)
+        for c in a_cols:
+            cell = ws.cell(row=r, column=c)
+            cell.value = None  # keep blank
+
+            cell.fill = data_fill
+            cell.font = label_font   # matches the “Yes/Negative/…” styling in your template
+            cell.alignment = a_align
+
+            # Outer border only (no internal vertical borders between H and I)
+            cell.border = Border(
+                left=thin if c == 8 else Side(style=None),
+                right=thin if c == 9 else Side(style=None),
+                top=thin,
+                bottom=thin,
+            )
+
 def write_valuation_sheet(writer, final_output, ticker):
     """Write the valuation analysis sheet with 2x2 grid layout"""
     reported_currency = final_output["summary"]["reported_currency"]
