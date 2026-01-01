@@ -6,7 +6,8 @@ import os
 import sys
 import requests
 import datetime
-from gemini_summarizer import generate_post_summary
+from forum_posts import fetch_moat_threat_source_for_ticker
+from summarization import generate_post_summary, generate_moat_threat_summary
 from forum_posts import fetch_all_for_ticker
 from dotenv import load_dotenv
 from gen_excel import generate_excel_for_ticker_year
@@ -1080,7 +1081,8 @@ def transform_final_output(final_output: dict, stock_price: float = None):
             "sector": final_output.get("sector"),
             "industry": final_output.get("industry"),
             "reported_currency": final_output.get("reported_currency"),
-            "isAdr": final_output.get("isAdr")
+            "isAdr": final_output.get("isAdr"),
+            "moat_threat": final_output.get("moat_threat", {})
         },
         "company_description": {
             "fiscal_year_end": fiscal_year_end,
@@ -1179,6 +1181,38 @@ def normalize_data(data, key=None):
     else:
         # For scalar values, format them using the current key context
         return format_number(data, key=key)
+    
+def process_moat_threats(symbol, debug=False):
+    """
+    1. Fetches raw moat threat posts using forum_posts.py logic.
+    2. Generates summaries using the summarization package.
+    Returns the dictionary of summaries.
+    """
+    try:
+        print(f"\n--- Starting Moat Threat Analysis for {symbol} ---")
+        
+        # 1. Fetch Source (Source of Truth)
+        # This saves to output/{symbol}_moat_threat_source.json
+        source_data = fetch_moat_threat_source_for_ticker(
+            symbol, 
+            debug=debug,
+            require_author=True # Assuming we stick to the default strict filtering
+        )
+
+        if not source_data:
+            print(f"No moat threat source data found for {symbol}.")
+            return {}
+
+        # 2. Generate Summary (LLM)
+        # This reads the source file we just created and generates output/{symbol}_moat_threat_summary.json
+        result = generate_moat_threat_summary(symbol)
+        
+        # Return just the summaries dictionary (e.g., {"Regulatory": "...", "Competition": "..."})
+        return result.get("moatThreatSummaries", {})
+
+    except Exception as e:
+        print(f"Error processing moat threats: {e}")
+        return {}
 
 def process_qualities(symbol, ignore_qualities=False, debug=False, email_lookback_years=15):
     if not ignore_qualities:
@@ -1398,11 +1432,16 @@ if __name__ == "__main__":
         "qualities": "",
         "industry_comparison": industry_data,
         "isAdr": profile.get("isAdr", False),
+        "moat_threat": {}
     }
 
     # Process qualities
     qualities = process_qualities(symbol, ignore_qualities=ignore_qualities, debug=debug, email_lookback_years=args.email_lookback_years)
     final_output["qualities"] = qualities
+
+    # moat threat analysis
+    moat_threats = process_moat_threats(symbol, debug=debug)
+    final_output["moat_threat"] = moat_threats
 
     rearranged_output = transform_final_output(final_output, stock_price=current_stock_price)
     # rearranged_output = finalize_output(rearranged_output)  # apply normalization

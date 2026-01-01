@@ -128,6 +128,9 @@ def write_summary_sheet(writer, final_output):
     exchange = summary_data["exchange"]
     symbol = summary_data["symbol"]
     description = summary_data["description"]
+    
+    # NEW: Retrieve moat threat data
+    moat_threats = summary_data.get("moat_threat", {})
 
     # Write and format the combined title in E1
     combined_title = f"{company_name.upper()} ({exchange}) - {symbol}"
@@ -140,11 +143,44 @@ def write_summary_sheet(writer, final_output):
 
     # Wrap and write the description
     wrapped_lines = textwrap.wrap(description, width=150)
-    start_row = 5
+    
+    # Use current_row to track position dynamically
+    current_row = 5
     col = 2  # Column B
-    for i, line in enumerate(wrapped_lines):
-        cell = ws.cell(row=start_row + i, column=col, value=line)
-        # Optionally, you can set font here if needed
+
+    for line in wrapped_lines:
+        cell = ws.cell(row=current_row, column=col, value=line)
+        cell.font = data_tnr_font
+        current_row += 1
+        
+    # --- NEW: Moat Threat Section ---
+    if moat_threats:
+        # Add a spacer row
+        current_row += 1
+        
+        # Section Header
+        ws.cell(row=current_row, column=1, value="Moat Threats").font = label_font
+        current_row += 1
+        
+        # Iterate through the threat categories
+        for category, text in moat_threats.items():
+            # 1. Write the Category Title (e.g., "Regulatory Issues:") in Bold
+            header_cell = ws.cell(row=current_row, column=2, value=f"{category}:")
+            header_cell.font = data_tnr_bold_font
+            current_row += 1
+            
+            # 2. Clean and Wrap the text
+            # (Strip any markdown bolding if it slipped through the LLM)
+            clean_text = text.replace("**", "").replace("__", "")
+            threat_lines = textwrap.wrap(clean_text, width=150)
+            
+            for t_line in threat_lines:
+                cell = ws.cell(row=current_row, column=2, value=t_line)
+                cell.font = data_tnr_font
+                current_row += 1
+            
+            # Add a small spacer between threat items for readability
+            current_row += 1
 
 def write_company_description(writer, final_output):
     reported_currency = final_output["summary"]["reported_currency"]
