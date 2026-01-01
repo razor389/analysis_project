@@ -430,7 +430,11 @@ def write_analyses_sheet(writer, final_output):
     ws.freeze_panes = "B1"
 
     # Write and format the "Investment Characteristics" title
-    ic_cell = ws.cell(row=1, column=6, value="Investment Characteristics (in mlns "+reported_currency + ")")
+    ic_cell = ws.cell(
+        row=1,
+        column=6,
+        value="Investment Characteristics (in mlns " + reported_currency + ")",
+    )
     ic_cell.fill = label_fill
     ic_cell.font = title_font
     apply_table_border(ws, 1, 5, 9)
@@ -449,33 +453,24 @@ def write_analyses_sheet(writer, final_output):
         (17, 4, "Growth Rate PS %:"),
         (13, 8, "Sales Analysis (last 5 yrs.):"),
         (15, 9, "Growth Rate %:"),
-        (17, 9, "Growth Rate PS %:")
+        (17, 9, "Growth Rate PS %:"),
     ]
 
     for row, col, text in labels_with_positions:
         cell = ws.cell(row=row, column=col, value=text)
         cell.fill = label_fill
         cell.font = label_font
-        apply_table_border(ws, row, col, col+1)
-        title_fill_range(ws, row, col, col+1)
+        apply_table_border(ws, row, col, col + 1)
+        title_fill_range(ws, row, col, col + 1)
 
     # Fetch data for the investment characteristics
-    # These will be replaced with formulas
-    growth_rate_operating_eps = inv_char["earnings_analysis"].get("growth_rate_percent_operating_eps")
-    quality_percent = inv_char["earnings_analysis"].get("quality_percent")
-    avg_div_payout = inv_char["use_of_earnings_analysis"].get("avg_dividend_payout_percent")
     avg_stk_buyback = inv_char["use_of_earnings_analysis"].get("avg_stock_buyback_percent")
-
     growth_rate_rev = inv_char["sales_analysis"].get("growth_rate_percent_revenues")
     growth_rate_sps = inv_char["sales_analysis"].get("growth_rate_percent_sales_per_share")
-    
-    # We'll replace these with formulas
-    # growth_rate_rev_5y = inv_char["sales_analysis_last_5_years"].get("growth_rate_percent_revenues")
-    # growth_rate_sps_5y = inv_char["sales_analysis_last_5_years"].get("growth_rate_percent_sales_per_share")
 
     # Get sorted years for Co. Desc references
     sorted_years = sorted(data.keys(), key=lambda x: int(x))
-    
+
     # Determine the next two years
     if sorted_years:
         max_year = max(int(year) for year in sorted_years)
@@ -483,50 +478,55 @@ def write_analyses_sheet(writer, final_output):
     else:
         new_years = ["2024", "2025"]
 
-    # Find the first and last year columns in Co. Desc sheet (for CAGR calculations)
     # Years in Co. Desc start at column B (2)
     first_year_col = 2  # Column B
     last_year_col = first_year_col + len(sorted_years) - 1  # Last historical year
     first_year_letter = get_column_letter(first_year_col)
     last_year_letter = get_column_letter(last_year_col)
 
-    # Calculate the number of years for CAGR formula
+    # Years span for full-history CAGR (needs at least 2 years)
     years_span = len(sorted_years) - 1 if len(sorted_years) > 1 else 1
 
-    # Determine columns for 5-year growth rate calculation
-    # If we have more than 5 historical years, use the last 5
-    # Otherwise, use all available historical years
-    last_5y_count = min(5, len(sorted_years))
-    first_5y_col = last_year_col - last_5y_count + 1
-    first_5y_letter = get_column_letter(first_5y_col)
-    
-    # Write data cells with formulas for specified metrics
+    # --- CORRECTED: 5-year growth rate with RATE uses n=5 and start = 5 years back (needs 6 points) ---
+    has_5y = len(sorted_years) >= 6
+    if has_5y:
+        first_5y_col = last_year_col - 5
+        first_5y_letter = get_column_letter(first_5y_col)
+    else:
+        first_5y_letter = None
+
     data_cells = {
-        # Formula for Growth Rate % (Operating EPS): CAGR of operating_eps from Co. Desc
-        # CAGR formula: (end_value/start_value)^(1/years) - 1
+        # Operating EPS CAGR (full history)
         (5, 6): f"=(('Co. Desc'!{last_year_letter}6/'Co. Desc'!{first_year_letter}6)^(1/{years_span})-1)",
-        
-        # Formula for Quality %: Avg diluted_eps / Avg operating_eps
-        # Using AVERAGE function on the range of cells in Co. Desc
+
+        # Quality %: Avg diluted_eps / Avg operating_eps
         (7, 6): f"=AVERAGE('Co. Desc'!{first_year_letter}5:{last_year_letter}5)/AVERAGE('Co. Desc'!{first_year_letter}6:{last_year_letter}6)",
-        
-        # Formula for Avg Div Payout Rate: Avg dividends_per_share / Avg operating_eps
+
+        # Avg Div Payout Rate: Avg dividends_per_share / Avg operating_eps
         (5, 11): f"=AVERAGE('Co. Desc'!{first_year_letter}13:{last_year_letter}13)/AVERAGE('Co. Desc'!{first_year_letter}6:{last_year_letter}6)",
-        
-        # Keep the original value for Avg Stock Buyback Rate
+
+        # Avg Stock Buyback Rate (keep original value)
         (7, 11): avg_stk_buyback,
-        
-        # Keep original values for these metrics
+
+        # Keep original values
         (15, 6): growth_rate_rev,
         (17, 6): growth_rate_sps,
-        
-        # MODIFIED: Use RATE function for 5-year growth calculations
-        # For revenues (cell 15,11)
-        (15, 11): f"=RATE(COUNT({first_5y_letter}10:{last_year_letter}10),,{first_5y_letter}10*-1,{last_year_letter}10)",
-        
-        # For sales per share (cell 17,11)
-        (17, 11): f"=RATE(COUNT({first_5y_letter}11:{last_year_letter}11),,{first_5y_letter}11*-1,{last_year_letter}11)"
     }
+
+    # 5-year (n=5) growth with RATE (preferred by you)
+    # RATE(nper, pmt, pv, fv) with pv negative
+    if has_5y:
+        data_cells[(15, 11)] = (
+            f"=IF(OR({first_5y_letter}10<=0,{last_year_letter}10<=0),\"\","
+            f"RATE(5,0,-{first_5y_letter}10,{last_year_letter}10))"
+        )
+        data_cells[(17, 11)] = (
+            f"=IF(OR({first_5y_letter}11<=0,{last_year_letter}11<=0),\"\","
+            f"RATE(5,0,-{first_5y_letter}11,{last_year_letter}11))"
+        )
+    else:
+        data_cells[(15, 11)] = ""
+        data_cells[(17, 11)] = ""
 
     # Write the investment characteristics data (data cells)
     for (row, col), value in data_cells.items():
@@ -534,13 +534,10 @@ def write_analyses_sheet(writer, final_output):
         cell.fill = data_fill
         cell.font = data_tnr_bold_font
         cell.border = thin_border
-        # Apply percentage format for these values
-        cell.number_format = '0.0%'
+        cell.number_format = "0.0%"
 
     # Handle the data by years
-    # Append the new years to the sorted_years list
     all_years = sorted_years + new_years
-    
     start_col = 2  # Column B
 
     # Write years at row 9 and row 19 (year labels)
@@ -556,16 +553,12 @@ def write_analyses_sheet(writer, final_output):
         y19_cell.border = thin_border
 
     # Define the metrics and their row positions
-    metric_rows_1 = {
-        "revenues": 10,
-        "sales_per_share": 11
-    }
-
+    metric_rows_1 = {"revenues": 10, "sales_per_share": 11}
     metric_rows_2 = {
         "op_margin_percent": 20,
         "tax_rate": 21,
         "depreciation": 22,
-        "depreciation_percent": 23
+        "depreciation_percent": 23,
     }
 
     # Add labels in column A for these metrics with label formatting
@@ -575,24 +568,21 @@ def write_analyses_sheet(writer, final_output):
         20: "Operating Margin %",
         21: "Tax Rate %",
         22: "Depreciation",
-        23: "Depreciation %"
+        23: "Depreciation %",
     }
 
     # Define the formatting rules for each metric
     number_formats = {
-        "revenues": '#,##0',  # Millions with commas
-        "sales_per_share": '#,##0.00',  # Dollars and cents
-        "op_margin_percent": '0.0%',  # Percentage with one decimal place
-        "tax_rate": '0.0%',  # Percentage with one decimal place
-        "depreciation": '#,##0',  # Millions with commas
-        "depreciation_percent": '0.0%'  # Percentage with one decimal place
+        "revenues": "#,##0",
+        "sales_per_share": "#,##0.00",
+        "op_margin_percent": "0.0%",
+        "tax_rate": "0.0%",
+        "depreciation": "#,##0",
+        "depreciation_percent": "0.0%",
     }
 
     # Define metrics that should be displayed in millions
-    million_scale_metrics = {
-        "revenues",
-        "depreciation"
-    }
+    million_scale_metrics = {"revenues", "depreciation"}
 
     for row, label in additional_labels.items():
         cell = ws.cell(row=row, column=1, value=label)
@@ -605,82 +595,36 @@ def write_analyses_sheet(writer, final_output):
         for i, year in enumerate(all_years):
             col = start_col + i
             col_letter = get_column_letter(col)
-            
+
             if metric == "sales_per_share":
-                # revenue this year / shares outstanding from Co. Desc sheet
                 formula = f"={col_letter}{metric_rows_1['revenues']}/('Co. Desc'!{col_letter}16)"
                 cell = ws.cell(row=row_num, column=col, value=formula)
-                
             else:
                 val = data.get(year, {}).get(metric)
                 if val is not None and metric in million_scale_metrics:
                     val = val / 1_000_000
                 cell = ws.cell(row=row_num, column=col, value=val)
-            
+
             cell.fill = data_fill
             cell.font = data_tnr_italic_font if year in new_years else data_tnr_font
             cell.border = thin_border
             cell.number_format = number_formats[metric]
 
-    # Write second set of metrics (data cells)
+    # Write second set of metrics (data cells) -- removed duplicate loop
     for metric, row_num in metric_rows_2.items():
         for i, year in enumerate(all_years):
             col = start_col + i
             col_letter = get_column_letter(col)
-            
-            if year in new_years:
-                if metric == "depreciation_percent":
-                    # MODIFIED: depreciation this year / net profit from Co. Desc sheet
-                    formula = f"={col_letter}{metric_rows_2['depreciation']}/('Co. Desc'!{col_letter}4)"
-                    cell = ws.cell(row=row_num, column=col, value=formula)
-                else:
-                    val = data.get(year, {}).get(metric)
-                    if val is not None and metric in million_scale_metrics:
-                        val = val / 1_000_000
-                    cell = ws.cell(row=row_num, column=col, value=val)
-            else:
-                if metric == "depreciation_percent":
-                    # MODIFIED: Ensure depreciation_percent uses formula for historical years too
-                    formula = f"={col_letter}{metric_rows_2['depreciation']}/('Co. Desc'!{col_letter}4)"
-                    cell = ws.cell(row=row_num, column=col, value=formula)
-                else:
-                    val = data.get(year, {}).get(metric)
-                    if val is not None and metric in million_scale_metrics:
-                        val = val / 1_000_000
-                    cell = ws.cell(row=row_num, column=col, value=val)
-            
-            cell.fill = data_fill
-            cell.font = data_tnr_italic_font if year in new_years else data_tnr_font
-            cell.border = thin_border
-            cell.number_format = number_formats[metric]
 
-    # Write second set of metrics (data cells)
-    for metric, row_num in metric_rows_2.items():
-        for i, year in enumerate(all_years):
-            col = start_col + i
-            col_letter = get_column_letter(col)
-            
-            if year in new_years:
-                if metric == "depreciation_percent":
-                    # MODIFIED: depreciation this year / net profit from Co. Desc sheet
-                    formula = f"={col_letter}{metric_rows_2['depreciation']}/('Co. Desc'!{col_letter}4)"
-                    cell = ws.cell(row=row_num, column=col, value=formula)
-                else:
-                    val = data.get(year, {}).get(metric)
-                    if val is not None and metric in million_scale_metrics:
-                        val = val / 1_000_000
-                    cell = ws.cell(row=row_num, column=col, value=val)
+            if metric == "depreciation_percent":
+                formula = f"={col_letter}{metric_rows_2['depreciation']}/('Co. Desc'!{col_letter}4)"
+                cell = ws.cell(row=row_num, column=col, value=formula)
             else:
-                if metric == "depreciation_percent":
-                    # MODIFIED: Ensure depreciation_percent uses formula for historical years too
-                    formula = f"={col_letter}{metric_rows_2['depreciation']}/('Co. Desc'!{col_letter}4)"
-                    cell = ws.cell(row=row_num, column=col, value=formula)
-                else:
-                    val = data.get(year, {}).get(metric)
-                    if val is not None and metric in million_scale_metrics:
-                        val = val / 1_000_000
-                    cell = ws.cell(row=row_num, column=col, value=val)
-            
+                val = data.get(year, {}).get(metric)
+                if val is not None and metric in million_scale_metrics:
+                    val = val / 1_000_000
+                cell = ws.cell(row=row_num, column=col, value=val)
+
             cell.fill = data_fill
             cell.font = data_tnr_italic_font if year in new_years else data_tnr_font
             cell.border = thin_border
