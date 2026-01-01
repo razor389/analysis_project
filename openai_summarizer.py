@@ -1,4 +1,4 @@
-# forum_post_summary.py
+# openai_summarizer.py
 
 import os
 import json
