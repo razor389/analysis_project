@@ -270,10 +270,22 @@ async def generate_moat_threat_summary_async(
             )
             return name, summary
 
-    tasks = [_summarize_one(name, posts) for name, posts in moat_map.items()]
-    pairs = await asyncio.gather(*tasks)
+    # Pre-fill summaries for empty/missing subcategories; only call LLM for non-empty ones.
+    summaries: Dict[str, str] = {}
+    tasks = []
 
-    summaries = {name: summary for name, summary in pairs}
+    for name, posts in moat_map.items():
+        # Treat None / non-list / empty list as "no data"
+        if not posts or not isinstance(posts, list):
+            summaries[name] = None
+            continue
+        tasks.append(_summarize_one(name, posts))
+
+    if tasks:
+        pairs = await asyncio.gather(*tasks)
+        for name, summary in pairs:
+            summaries[name] = summary
+
     result = {"ticker": ticker, "moatThreatSummaries": summaries}
 
     os.makedirs("output", exist_ok=True)

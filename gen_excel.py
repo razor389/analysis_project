@@ -29,6 +29,7 @@ data_arial_italic_font = Font(name = "Arial", size=10, italic=True)
 
 center_alignment = Alignment(horizontal="center", vertical="center")
 right_alignment = Alignment(horizontal="right", vertical="center")
+entry_alignment = Alignment(wrap_text=True, vertical="top")
 # Define a thin black border
 thin_border = Border(
     left=Side(style='thin', color='000000'),
@@ -154,33 +155,59 @@ def write_summary_sheet(writer, final_output):
         current_row += 1
         
     # --- NEW: Moat Threat Section ---
-    if moat_threats:
+    if moat_threats is not None:
         # Add a spacer row
         current_row += 1
-        
+
         # Section Header
         ws.cell(row=current_row, column=1, value="Moat Threats").font = label_font
         current_row += 1
-        
-        # Iterate through the threat categories
+
+        # How many blank rows to reserve when no text
+        BLANK_ROWS = 4
+
         for category, text in moat_threats.items():
-            # 1. Write the Category Title (e.g., "Regulatory Issues:") in Bold
+            # 1) Category Title
             header_cell = ws.cell(row=current_row, column=2, value=f"{category}:")
             header_cell.font = data_tnr_bold_font
             current_row += 1
-            
-            # 2. Clean and Wrap the text
-            # (Strip any markdown bolding if it slipped through the LLM)
-            clean_text = text.replace("**", "").replace("__", "")
+
+            # 2) If missing summary, create a fill-in area
+            if not text or not str(text).strip():
+                # Create a merged cell area (optional but nice): B{row}:E{row+BLANK_ROWS-1}
+                start_row = current_row
+                end_row = current_row + BLANK_ROWS - 1
+
+                ws.merge_cells(start_row=start_row, start_column=2, end_row=end_row, end_column=5)
+
+                entry_cell = ws.cell(row=start_row, column=2, value="")  # blank
+                entry_cell.font = data_tnr_font
+                entry_cell.alignment = entry_alignment
+
+                # Give the blank area some visible height
+                for r in range(start_row, end_row + 1):
+                    ws.row_dimensions[r].height = 18  # adjust to taste (18–24 typical)
+
+                    # Ensure merged-region cells have alignment set (some Excel viewers care)
+                    for c in range(2, 6):  # B..E
+                        ws.cell(row=r, column=c).alignment = entry_alignment
+                        ws.cell(row=r, column=c).font = data_tnr_font
+
+                current_row = end_row + 1
+                current_row += 1  # spacer between categories
+                continue
+
+            # 3) Normal path: clean + wrap and write text lines
+            clean_text = str(text).replace("**", "").replace("__", "")
             threat_lines = textwrap.wrap(clean_text, width=150)
-            
+
             for t_line in threat_lines:
                 cell = ws.cell(row=current_row, column=2, value=t_line)
                 cell.font = data_tnr_font
+                cell.alignment = entry_alignment
                 current_row += 1
-            
-            # Add a small spacer between threat items for readability
-            current_row += 1
+
+            current_row += 1  # spacer between threat items
 
 def write_company_description(writer, final_output):
     reported_currency = final_output["summary"]["reported_currency"]

@@ -306,8 +306,8 @@ def fetch_moat_threat_source_for_ticker(
                 })
 
         posts_for_subcat.sort(key=lambda p: p.get("timestamp", 0))
-        if posts_for_subcat:
-            moat_data[moat_cat_title] = posts_for_subcat
+        
+        moat_data[moat_cat_title] = posts_for_subcat
 
         if debug:
             print(f"\n[DEBUG] Moat subcat: '{moat_cat_title}' (categoryId={moat_cat_id})")
