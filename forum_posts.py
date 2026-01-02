@@ -306,7 +306,8 @@ def fetch_moat_threat_source_for_ticker(
                 })
 
         posts_for_subcat.sort(key=lambda p: p.get("timestamp", 0))
-        moat_data[moat_cat_title] = posts_for_subcat
+        if posts_for_subcat:
+            moat_data[moat_cat_title] = posts_for_subcat
 
         if debug:
             print(f"\n[DEBUG] Moat subcat: '{moat_cat_title}' (categoryId={moat_cat_id})")
@@ -329,6 +330,10 @@ def fetch_moat_threat_source_for_ticker(
             "topEmailsSeen": emails_seen.most_common(10),
         }
 
+    if not moat_data:
+        print(f"No posts found for moat-threat subcategories of '{ticker}'.")
+        return None
+    
     assembled = {
         "ticker": ticker,
         "category": {"title": parent_cat.get("title"), "categoryId": parent_id},
