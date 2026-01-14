@@ -35,6 +35,11 @@ PR_SENDER_SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x5D01001E"
 PR_RECEIVED_BY_SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x5D07001E"
 PR_SENT_REPRESENTING_SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x5D02001E"
 
+def to_naive(dt: datetime) -> datetime:
+    """Return a tz-naive datetime (drop tzinfo if present)."""
+    if isinstance(dt, datetime) and dt.tzinfo is not None:
+        return dt.replace(tzinfo=None)
+    return dt
 
 def load_ticker_config(config_path: str = "ticker_email_config.json") -> Dict[str, List[str]]:
     """
@@ -282,7 +287,7 @@ def filter_emails(
     seen_emails = set()
 
     # IMPORTANT FIX: use naive datetime to match Outlook COM naive datetimes
-    cutoff_date = datetime.now() - timedelta(days=lookback_years * 365)
+    cutoff_date = to_naive(datetime.now() - timedelta(days=lookback_years * 365))
 
     patterns = {
         term: re.compile(r"\b" + re.escape(term) + r"\b", re.IGNORECASE)
@@ -311,6 +316,8 @@ def filter_emails(
                 sent_time_dt = getattr(message, "SentOn", None)
                 if not isinstance(sent_time_dt, datetime):
                     continue
+
+                sent_time_dt = to_naive(sent_time_dt)
 
                 # Cutoff
                 if sent_time_dt < cutoff_date:
