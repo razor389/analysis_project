@@ -35,11 +35,21 @@ PR_SENDER_SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x5D01001E"
 PR_RECEIVED_BY_SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x5D07001E"
 PR_SENT_REPRESENTING_SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x5D02001E"
 
+
+def safe_getattr(obj, name, default=None):
+    """Safely get an attribute from a COM object without raising."""
+    try:
+        return getattr(obj, name, default)
+    except Exception:
+        return default
+
+
 def to_naive(dt: datetime) -> datetime:
     """Return a tz-naive datetime (drop tzinfo if present)."""
     if isinstance(dt, datetime) and dt.tzinfo is not None:
         return dt.replace(tzinfo=None)
     return dt
+
 
 def load_ticker_config(config_path: str = "ticker_email_config.json") -> Dict[str, List[str]]:
     """
@@ -83,7 +93,6 @@ def initialize_outlook():
         outlook = win32com.client.Dispatch("Outlook.Application")
         namespace = outlook.GetNamespace("MAPI")
         # Use existing profile/session; avoid prompting if possible.
-        # If you want to force prompt, set Prompt=True.
         namespace.Logon("", "", False, False)
         return namespace
     except Exception as e:
@@ -94,7 +103,7 @@ def initialize_outlook():
 def safe_get_smtp_from_accessor(message, prop_tag: str) -> Optional[str]:
     """Try to get an SMTP address using PropertyAccessor; return None if unavailable."""
     try:
-        accessor = getattr(message, "PropertyAccessor", None)
+        accessor = safe_getattr(message, "PropertyAccessor", None)
         if accessor is None:
             return None
         val = accessor.GetProperty(prop_tag)
@@ -117,7 +126,7 @@ def safe_get_sender_smtp(message) -> Optional[str]:
 
     # Fallback
     try:
-        v = getattr(message, "SenderEmailAddress", None)
+        v = safe_getattr(message, "SenderEmailAddress", None)
         if v:
             return str(v).strip().lower()
     except Exception:
@@ -131,13 +140,12 @@ def safe_iter_recipients_addresses(message) -> Iterable[str]:
     but it's still useful as a fallback. This function is best-effort and never throws.
     """
     try:
-        recipients = getattr(message, "Recipients", None)
+        recipients = safe_getattr(message, "Recipients", None)
         if not recipients:
             return
-        # Recipients is COM collection
         for r in recipients:
             try:
-                addr = getattr(r, "Address", None)
+                addr = safe_getattr(r, "Address", None)
                 if addr:
                     yield str(addr).strip().lower()
             except Exception:
@@ -218,15 +226,13 @@ def build_items_sources(namespace) -> List[Tuple[str, Any]]:
         top_folders = namespace.Folders
         for store in top_folders:
             try:
-                store_name = str(getattr(store, "Name", "UnknownStore"))
+                store_name = str(safe_getattr(store, "Name", "UnknownStore"))
                 sent_folder = None
 
                 # Most common English name
                 try:
                     sent_folder = store.Folders["Sent Items"]
                 except Exception:
-                    # Fallback to default folder for this store isn't directly exposed here;
-                    # skip if not found.
                     sent_folder = None
 
                 if sent_folder is None:
@@ -239,7 +245,7 @@ def build_items_sources(namespace) -> List[Tuple[str, Any]]:
                 except Exception:
                     pass
 
-                count = getattr(items, "Count", None)
+                count = safe_getattr(items, "Count", None)
                 if count is None:
                     sources.append((f"{store_name} / Sent Items", items))
                 else:
@@ -281,6 +287,7 @@ def filter_emails(
     - Robust SMTP extraction for sender (Exchange safe).
     - Optionally require sender match with SENDER_EMAIL.
     - Search across all stores' Sent Items.
+    - Enhanced exception logging with traceback + identifiers (EntryID/StoreID/SentOn).
     """
     filtered_emails: List[Dict[str, Any]] = []
     processed_count = 0
@@ -296,7 +303,7 @@ def filter_emails(
 
     for source_name, items in items_sources:
         try:
-            total = getattr(items, "Count", None)
+            total = safe_getattr(items, "Count", None)
             logging.info(f"Scanning {source_name} ...")
             if total is not None:
                 logging.info(f"Total messages in {source_name}: {total}")
@@ -306,18 +313,30 @@ def filter_emails(
         for message in items:
             try:
                 # 43 = olMailItem
-                if getattr(message, "Class", None) != 43:
+                if safe_getattr(message, "Class", None) != 43:
                     continue
 
                 # Exclusion check (fail-open)
                 if email_contains_excluded_address(message, EXCLUDED_EMAIL):
                     continue
 
-                sent_time_dt = getattr(message, "SentOn", None)
-                if not isinstance(sent_time_dt, datetime):
+                sent_time_dt_raw = safe_getattr(message, "SentOn", None)
+                if not sent_time_dt_raw:
                     continue
 
-                sent_time_dt = to_naive(sent_time_dt)
+                # Force conversion to a tz-naive Python datetime
+                try:
+                    sent_time_dt = datetime(
+                        sent_time_dt_raw.year,
+                        sent_time_dt_raw.month,
+                        sent_time_dt_raw.day,
+                        sent_time_dt_raw.hour,
+                        sent_time_dt_raw.minute,
+                        sent_time_dt_raw.second,
+                        safe_getattr(sent_time_dt_raw, "microsecond", 0),
+                    )
+                except Exception:
+                    continue  # don't fall back to a COM datetime-like object
 
                 # Cutoff
                 if sent_time_dt < cutoff_date:
@@ -331,7 +350,7 @@ def filter_emails(
                     if not sender_smtp or sender_smtp != SENDER_EMAIL:
                         continue
 
-                subject = str(getattr(message, "Subject", "") or "").strip()
+                subject = str(safe_getattr(message, "Subject", "") or "").strip()
                 if not subject:
                     continue
 
@@ -343,7 +362,7 @@ def filter_emails(
                         continue
                     seen_emails.add(email_id)
 
-                    raw_body = str(getattr(message, "Body", "") or "").strip()
+                    raw_body = str(safe_getattr(message, "Body", "") or "").strip()
                     cleaned_body = clean_message(raw_body)
 
                     found_terms = [
@@ -365,14 +384,24 @@ def filter_emails(
                 if processed_count % 1000 == 0:
                     logging.info(f"Processed {processed_count} messages...")
 
-            except Exception as e:
-                # Recommended change: log the exception with basic context
-                subj = None
-                try:
-                    subj = getattr(message, "Subject", None)
-                except Exception:
-                    subj = None
-                logging.warning(f"Failed to process message (Subject={subj!r}): {e}")
+            except Exception:
+                # Enhanced exception logging: traceback + key message identifiers/context
+                entry_id = safe_getattr(message, "EntryID")
+                store_id = safe_getattr(message, "StoreID")
+                sent_on_raw = safe_getattr(message, "SentOn")
+                sender_smtp = safe_get_sender_smtp(message)
+
+                logging.exception(
+                    "Failed to process message",
+                    extra={
+                        "subject": safe_getattr(message, "Subject"),
+                        "entry_id": entry_id,
+                        "store_id": store_id,
+                        "sent_on_raw": repr(sent_on_raw),
+                        "sender_smtp": sender_smtp,
+                        "source": source_name,
+                    },
+                )
                 continue
 
     return filtered_emails
@@ -450,3 +479,6 @@ def main():
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}")
         sys.exit(1)
+
+if __name__ == "__main__":
+    main()
