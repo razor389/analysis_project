@@ -283,6 +283,9 @@ def filter_emails(
 
     # Define cutoff (naive)
     cutoff_date = to_naive(datetime.now() - timedelta(days=lookback_years * 365))
+    
+    # Define "Today" for debug logging (last 24 hours)
+    debug_cutoff = to_naive(datetime.now() - timedelta(hours=24))
 
     patterns = {
         term: re.compile(r"\b" + re.escape(term) + r"\b", re.IGNORECASE)
@@ -295,16 +298,16 @@ def filter_emails(
         # DEBUG: Check if sort worked by peeking at first item date
         try:
             first_item = items[0]
-            logging.info(f"First item in this folder date: {safe_getattr(first_item, 'SentOn', 'Unknown')}")
+            logging.info(f"First item in folder date: {safe_getattr(first_item, 'SentOn', 'Unknown')}")
         except Exception:
-            logging.info("Could not peek at first item.")
+            logging.info("Could not peek at first item (folder empty or inaccessible).")
 
+        # Iterate all items
         for message in items:
             subject = str(safe_getattr(message, "Subject", "") or "").strip()
             
             # 1. Class Check
             if safe_getattr(message, "Class", None) != 43:
-                # logging.info(f"Skipping '{subject}': Not an email (Class {safe_getattr(message, 'Class')})")
                 continue
 
             # 2. Date Check
@@ -321,27 +324,32 @@ def filter_emails(
             except Exception:
                 continue
 
-            # BREAK CHECK: Only break if we are SURE it's sorted, otherwise just skip
+            # Check if this email is from "Today" (Last 24h)
+            is_recent_debug = sent_time_dt >= debug_cutoff
+
+            # 3. Cutoff Check (Modified)
+            # We comment out the 'break' to ensure we find recent emails even if unsorted
             if sent_time_dt < cutoff_date:
-                # logging.info(f"Hit cutoff date with message '{subject}' ({sent_time_dt}). Stopping scan of this folder.")
-                # DANGER: If sort failed, this stops us prematurely. 
-                # For debugging, let's COMMENT OUT the break to ensure we scan everything
-                # break 
+                # continue rather than break, to be safe during debug
                 continue 
 
-            # 3. Excluded Email Check
+            # 4. Excluded Email Check
             if email_contains_excluded_address(message, EXCLUDED_EMAIL):
-                logging.warning(f"Skipping '{subject}': Contains excluded email '{EXCLUDED_EMAIL}'")
+                if is_recent_debug:
+                    logging.warning(f"[DEBUG TODAY] Skipping '{subject}': Contains excluded email '{EXCLUDED_EMAIL}'")
                 continue
 
-            # 4. Sender Match Check
+            # 5. Sender Match Check
             sender_smtp = safe_get_sender_smtp(message)
             if require_sender_match:
+                # Normal check
                 if not sender_smtp or sender_smtp != SENDER_EMAIL:
-                    logging.warning(f"Skipping '{subject}': Sender mismatch. Found: '{sender_smtp}', Expected: '{SENDER_EMAIL}'")
+                    # Debug logging only for today's emails
+                    if is_recent_debug:
+                        logging.warning(f"[DEBUG TODAY] Skipping '{subject}': Sender mismatch. Found: '{sender_smtp}', Expected: '{SENDER_EMAIL}'")
                     continue
 
-            # 5. Term Match Check
+            # 6. Term Match Check
             found_terms = [
                 term for term, pattern in patterns.items() if pattern.search(subject)
             ]
@@ -365,9 +373,9 @@ def filter_emails(
                     "subject": subject,
                 })
             else:
-                # Optional: Log subjects of recent emails to see what is being read
-                if (datetime.now() - sent_time_dt).days < 1:
-                    logging.info(f"Skipping '{subject}': No matching search terms found.")
+                # Debug logging: Why didn't we match terms for today's email?
+                if is_recent_debug:
+                    logging.info(f"[DEBUG TODAY] Skipping '{subject}': Subject did not match search terms {list(patterns.keys())}")
 
             processed_count += 1
             if processed_count % 1000 == 0:
