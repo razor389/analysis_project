@@ -277,15 +277,15 @@ def filter_emails(
     lookback_years: int = 15,
     require_sender_match: bool = True,
 ) -> List[Dict[str, Any]]:
+    """
+    Filter emails that contain any of the search terms in the subject line.
+    """
     filtered_emails: List[Dict[str, Any]] = []
     processed_count = 0
     seen_emails = set()
 
     # Define cutoff (naive)
     cutoff_date = to_naive(datetime.now() - timedelta(days=lookback_years * 365))
-    
-    # Define "Today" for debug logging (last 24 hours)
-    debug_cutoff = to_naive(datetime.now() - timedelta(hours=24))
 
     patterns = {
         term: re.compile(r"\b" + re.escape(term) + r"\b", re.IGNORECASE)
@@ -293,20 +293,10 @@ def filter_emails(
     }
 
     for source_name, items in items_sources:
-        logging.info(f"--- Scanning Source: {source_name} ---")
-        
-        # DEBUG: Check if sort worked by peeking at first item date
-        try:
-            first_item = items[0]
-            logging.info(f"First item in folder date: {safe_getattr(first_item, 'SentOn', 'Unknown')}")
-        except Exception:
-            logging.info("Could not peek at first item (folder empty or inaccessible).")
+        logging.info(f"Scanning Source: {source_name} ...")
 
-        # Iterate all items
         for message in items:
-            subject = str(safe_getattr(message, "Subject", "") or "").strip()
-            
-            # 1. Class Check
+            # 1. Class Check (43 = olMailItem)
             if safe_getattr(message, "Class", None) != 43:
                 continue
 
@@ -315,7 +305,7 @@ def filter_emails(
             if not sent_time_dt_raw:
                 continue
 
-            # Convert to naive
+            # Convert to naive datetime
             try:
                 sent_time_dt = datetime(
                     sent_time_dt_raw.year, sent_time_dt_raw.month, sent_time_dt_raw.day,
@@ -324,30 +314,22 @@ def filter_emails(
             except Exception:
                 continue
 
-            # Check if this email is from "Today" (Last 24h)
-            is_recent_debug = sent_time_dt >= debug_cutoff
-
-            # 3. Cutoff Check (Modified)
-            # We comment out the 'break' to ensure we find recent emails even if unsorted
+            # 3. Cutoff Check
+            # Since items are sorted Descending, we can break once we hit old emails
             if sent_time_dt < cutoff_date:
-                # continue rather than break, to be safe during debug
-                continue 
+                break
 
             # 4. Excluded Email Check
             if email_contains_excluded_address(message, EXCLUDED_EMAIL):
-                if is_recent_debug:
-                    logging.warning(f"[DEBUG TODAY] Skipping '{subject}': Contains excluded email '{EXCLUDED_EMAIL}'")
                 continue
 
-            # 5. Sender Match Check
-            sender_smtp = safe_get_sender_smtp(message)
-            if require_sender_match:
-                # Normal check
-                if not sender_smtp or sender_smtp != SENDER_EMAIL:
-                    # Debug logging only for today's emails
-                    if is_recent_debug:
-                        logging.warning(f"[DEBUG TODAY] Skipping '{subject}': Sender mismatch. Found: '{sender_smtp}', Expected: '{SENDER_EMAIL}'")
-                    continue
+            # 5. Sender Match Check REMOVED
+            # We trust "Sent Items" contains only emails sent by the user.
+            # This avoids the Exchange X.500 address mismatch issue.
+
+            subject = str(safe_getattr(message, "Subject", "") or "").strip()
+            if not subject:
+                continue
 
             # 6. Term Match Check
             found_terms = [
@@ -355,7 +337,6 @@ def filter_emails(
             ]
             
             if found_terms:
-                # SUCCESS
                 logging.info(f"MATCH FOUND: '{subject}' with terms {found_terms}")
                 
                 unix_timestamp = int(sent_time_dt.timestamp())
@@ -372,10 +353,6 @@ def filter_emails(
                     "sourceFolder": source_name,
                     "subject": subject,
                 })
-            else:
-                # Debug logging: Why didn't we match terms for today's email?
-                if is_recent_debug:
-                    logging.info(f"[DEBUG TODAY] Skipping '{subject}': Subject did not match search terms {list(patterns.keys())}")
 
             processed_count += 1
             if processed_count % 1000 == 0:
