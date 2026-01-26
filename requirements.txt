@@ -9,3 +9,4 @@ anthropic
 google-generativeai
 urllib3
 beautifulsoup4
+lxml
