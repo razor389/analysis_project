@@ -836,7 +836,6 @@ def main():
         help='Number of years to look back when processing Outlook emails for qualities (default: 15)'
     )
     args = parser.parse_args()
-    debug = args.debug
     
     ticker = args.ticker.upper()
     # Load the metrics configuration file.
@@ -979,7 +978,7 @@ def main():
             qualities = ""
 
         # moat threat analysis
-        moat_threats = process_moat_threats(ticker, debug=debug)
+        moat_threats = process_moat_threats(ticker, debug=False)
 
         # Construct final output including qualities
         final_output = {
