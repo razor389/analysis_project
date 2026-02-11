@@ -13,7 +13,7 @@ from urllib.parse import urljoin
 from urllib3.util.retry import Retry
 
 # Import helper functions from your modules.
-from acm_analysis import calculate_cagr, process_qualities
+from acm_analysis import calculate_cagr, process_qualities, process_moat_threats
 from financial_data_preprocessor import process_financial_statements
 from gen_excel_bs import generate_excel_for_ticker_year
 from unified_segmentation import get_filing_contents
@@ -836,6 +836,7 @@ def main():
         help='Number of years to look back when processing Outlook emails for qualities (default: 15)'
     )
     args = parser.parse_args()
+    debug = args.debug
     
     ticker = args.ticker.upper()
     # Load the metrics configuration file.
@@ -977,6 +978,9 @@ def main():
         else:
             qualities = ""
 
+        # moat threat analysis
+        moat_threats = process_moat_threats(ticker, debug=debug)
+
         # Construct final output including qualities
         final_output = {
             "summary": summary,
@@ -998,7 +1002,8 @@ def main():
             "segmentation": inverted_output["segmentation"],
             "historical_pricing": historical_pricing_averages,  
             "industry_comparison": industry_data,
-            "qualities": qualities
+            "qualities": qualities,
+            "moat_threat": moat_threats
         }
 
         os.makedirs("output", exist_ok=True)
