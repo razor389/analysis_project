@@ -266,7 +266,19 @@
         "other_assets": "us-gaap:OtherAssets",
         "liabilities": "us-gaap:Liabilities",
         "unearned_premiums": "us-gaap:UnearnedPremiums",
-        "unpaid_losses_property_casualty_liability": "us-gaap:LiabilityForClaimsAndClaimsAdjustmentExpensePropertyCasualtyLiability",
+        "unpaid_losses_property_casualty_liability": [
+            {
+              "tag": "us-gaap:LiabilityForClaimsAndClaimsAdjustmentExpensePropertyCasualtyLiability",
+              "aggregate": "pick_one",
+              "year_lte": 2023
+            },
+            {
+              "tag": "us-gaap:LiabilityForClaimsAndClaimsAdjustmentExpense",
+              "aggregate": "pick_one",
+              "year_gte": 2024,
+              "explicitMembers": { "srt:ProductOrServiceAxis": "brka:InsuranceAndOtherMember" }
+            }
+        ],
         "unpaid_losses_retroactive_reinsurance": "brka:LiabilityForUnpaidClaimsAndClaimAdjustmentExpenseRetroactiveReinsuranceContracts",
         "life_annuity_health_benefits": "us-gaap:LiabilityForFuturePolicyBenefits",
         "other_policy_liability": "us-gaap:PolicyholderFunds",
@@ -290,30 +302,71 @@
         "treasury_stock_at_cost": "us-gaap:TreasuryStockValue"
       },
       "segmentation_mapping": {
-        "geico": {
-          "tag": "us-gaap:PremiumsEarnedNet",
-          "explicitMembers": {
-            "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
-            "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
-            "us-gaap:SubsegmentsAxis": "brka:GeicoMember"
+        "geico": [
+          {
+            "tag": "us-gaap:PremiumsEarnedNet",
+            "year_lte": 2023,
+            "explicitMembers": {
+              "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+              "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
+              "us-gaap:SubsegmentsAxis": "brka:GeicoMember"
+            }
+          },
+          {
+            "tag": "us-gaap:Revenues",
+            "year_gte": 2024,
+            "explicitMembers": {
+              "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+              "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
+              "us-gaap:SubsegmentsAxis": "brka:GeicoMember",
+              "srt:ProductOrServiceAxis": "brka:UnderwritingMember"
+            }
           }
-        },
-        "brk_primary_group": {
-          "tag": "us-gaap:PremiumsEarnedNet",
-          "explicitMembers": {
-            "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
-            "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
-            "us-gaap:SubsegmentsAxis": "brka:BerkshireHathawayPrimaryGroupMember"
+        ],
+
+        "brk_primary_group": [
+          {
+            "tag": "us-gaap:PremiumsEarnedNet",
+            "year_lte": 2023,
+            "explicitMembers": {
+              "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+              "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
+              "us-gaap:SubsegmentsAxis": "brka:BerkshireHathawayPrimaryGroupMember"
+            }
+          },
+          {
+            "tag": "us-gaap:Revenues",
+            "year_gte": 2024,
+            "explicitMembers": {
+              "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+              "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
+              "us-gaap:SubsegmentsAxis": "brka:BerkshireHathawayPrimaryGroupMember",
+              "srt:ProductOrServiceAxis": "brka:UnderwritingMember"
+            }
           }
-        },
-        "brk_reins_group": {
-          "tag": "us-gaap:PremiumsEarnedNet",
-          "explicitMembers": {
-            "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
-            "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
-            "us-gaap:SubsegmentsAxis": "brka:BerkshireHathawayReinsuranceGroupMember"
+        ],
+
+        "brk_reins_group": [
+          {
+            "tag": "us-gaap:PremiumsEarnedNet",
+            "year_lte": 2023,
+            "explicitMembers": {
+              "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+              "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
+              "us-gaap:SubsegmentsAxis": "brka:BerkshireHathawayReinsuranceGroupMember"
+            }
+          },
+          {
+            "tag": "us-gaap:Revenues",
+            "year_gte": 2024,
+            "explicitMembers": {
+              "srt:ConsolidationItemsAxis": "us-gaap:OperatingSegmentsMember",
+              "us-gaap:StatementBusinessSegmentsAxis": "brka:BerkshireHathawayInsuranceGroupMember",
+              "us-gaap:SubsegmentsAxis": "brka:BerkshireHathawayReinsuranceGroupMember",
+              "srt:ProductOrServiceAxis": "brka:UnderwritingMember"
+            }
           }
-        }
+        ]
       },
       "balance_sheet_categories": {
         "assets": [
