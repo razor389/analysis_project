@@ -399,8 +399,8 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         depreciation_percent = (depreciation / net_profit) if (depreciation and net_profit and net_profit != 0) else None
 
         # p/e low high
-        pe_low = yearly_low / diluted_eps if yearly_low is not None and diluted_eps !=0 else None
-        pe_high = yearly_high / diluted_eps if yearly_high is not None and diluted_eps != 0  else None
+        pe_low = yearly_low / diluted_eps if yearly_low is not None and diluted_eps not in (None, 0) else None
+        pe_high = yearly_high / diluted_eps if yearly_high is not None and diluted_eps not in (None, 0) else None
 
         # P/B low/high (fixed guard against None):
         if yearly_low is not None and book_value_per_share not in (None, 0):
@@ -414,14 +414,18 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
             pb_high = None
             
         # p/s low high
-        ps_low = yearly_low / sales_per_share if yearly_low is not None and sales_per_share !=0 else None
-        ps_high = yearly_high / sales_per_share if yearly_high is not None and sales_per_share != 0 else None
+        ps_low = yearly_low / sales_per_share if yearly_low is not None and sales_per_share not in (None, 0) else None
+        ps_high = yearly_high / sales_per_share if yearly_high is not None and sales_per_share not in (None, 0) else None
 
         # pcf low high
-        addback_dep_earnings_ps = (net_profit + depreciation) / shares_outstanding if net_profit is not None and depreciation is not None and shares_outstanding != 0 else None
+        addback_dep_earnings_ps = (
+            (net_profit + depreciation) / shares_outstanding
+            if net_profit is not None and depreciation is not None and shares_outstanding not in (None, 0)
+            else None
+        )
 
-        pcfs_low = yearly_low / addback_dep_earnings_ps if yearly_low is not None and addback_dep_earnings_ps != 0 else None
-        pcfs_high = yearly_high / addback_dep_earnings_ps if yearly_high is not None and addback_dep_earnings_ps != 0 else None
+        pcfs_low = yearly_low / addback_dep_earnings_ps if yearly_low is not None and addback_dep_earnings_ps not in (None, 0) else None
+        pcfs_high = yearly_high / addback_dep_earnings_ps if yearly_high is not None and addback_dep_earnings_ps not in (None, 0) else None
 
         year_segments = segmentation_data.get(str(year), {})
 
