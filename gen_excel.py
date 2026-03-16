@@ -2356,8 +2356,12 @@ def write_valuation_sheet(writer, final_output, ticker):
 
 def write_segmentation_sheet(writer, final_output):
     """
-    Write the Segmentation sheet showing revenue breakdown by business segment over time
-    
+    Write the Segmentation sheet showing revenue breakdown by business segment over time.
+
+    CAGR is calculated only when the first and last valid values for a segment are
+    both positive and there are at least two valid year points. This avoids complex
+    numbers when a segment changes sign (for example, negative to positive).
+
     Parameters:
     writer: ExcelWriter object
     final_output: Dictionary containing the full output data including segmentation data
@@ -2365,11 +2369,11 @@ def write_segmentation_sheet(writer, final_output):
     # Early return if segmentation data is not present
     if not final_output.get("segmentation"):
         return
-    
+
     reported_currency = final_output["summary"]["reported_currency"]
     segmentation_data = final_output["segmentation"]
     wb = writer.book
-    
+
     # Create the sheet if it doesn't exist
     if "Segmentation" not in wb.sheetnames:
         wb.create_sheet("Segmentation")
@@ -2413,24 +2417,21 @@ def write_segmentation_sheet(writer, final_output):
         for i, year in enumerate(sorted_years):
             year_col = i + 2  # Start at column B
             value = segmentation_data[year].get(segment)
-            
-            # Create cell and apply styling regardless of value
+
             value_cell = ws.cell(row=current_row, column=year_col)
             value_cell.fill = data_fill
             value_cell.font = data_arial_font
             value_cell.border = thin_border
             value_cell.alignment = right_alignment
-            
+
             if value is not None:
-                # Convert to millions and set value
-                value = value / 1_000_000
-                value_cell.value = value
+                value_cell.value = value / 1_000_000
                 value_cell.number_format = '#,##0'
 
         current_row += 1
 
-    # Calculate and write growth rates in the rightmost column
-    growth_col = len(sorted_years) + 3  # One column after percentages
+    # Calculate and write CAGR in the rightmost column
+    growth_col = len(sorted_years) + 3  # One column after the last year column
     growth_header = ws.cell(row=3, column=growth_col, value="CAGR")
     growth_header.fill = label_fill
     growth_header.font = label_font
@@ -2439,26 +2440,29 @@ def write_segmentation_sheet(writer, final_output):
 
     for segment_idx, segment in enumerate(sorted_segments):
         row = segment_idx + 4
-        
-        # Get first and last valid values
-        first_val = next((segmentation_data[year].get(segment) for year in sorted_years if segmentation_data[year].get(segment) is not None), None)
-        last_val = next((segmentation_data[year].get(segment) for year in reversed(sorted_years) if segmentation_data[year].get(segment) is not None), None)
-        
-        if first_val and last_val and first_val != 0:
-            years_between = len(sorted_years) - 1
-            if years_between > 0:
-                cagr = (last_val / first_val) ** (1/years_between) - 1
-                growth_cell = ws.cell(row=row, column=growth_col, value=cagr)
+
+        # Collect only valid points for this segment
+        valid_points = [
+            (int(year), segmentation_data[year].get(segment))
+            for year in sorted_years
+            if segmentation_data[year].get(segment) is not None
+        ]
+
+        growth_cell = ws.cell(row=row, column=growth_col)
+        growth_cell.fill = data_fill
+        growth_cell.border = thin_border
+
+        if len(valid_points) >= 2:
+            first_year, first_val = valid_points[0]
+            last_year, last_val = valid_points[-1]
+            years_between = last_year - first_year
+
+            # CAGR only makes sense here if both endpoints are positive
+            if first_val > 0 and last_val > 0 and years_between > 0:
+                cagr = (last_val / first_val) ** (1 / years_between) - 1
+                growth_cell.value = cagr
                 growth_cell.number_format = '0.0%'
                 growth_cell.font = Font(name="Arial", size=8, italic=True)
-                growth_cell.fill = data_fill  # Added fill for consistency
-                growth_cell.border = thin_border  # Added border for consistency
-
-        else:
-            # Create empty growth cell with consistent styling
-            growth_cell = ws.cell(row=row, column=growth_col)
-            growth_cell.fill = data_fill
-            growth_cell.border = thin_border
 
     # Adjust column widths
     ws.column_dimensions['A'].width = 30  # Segment names
