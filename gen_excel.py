@@ -243,14 +243,6 @@ def write_company_description(writer, final_output):
     sp_cell.number_format = '#,##0.00'
     sp_cell.border = thin_border
 
-    mc_raw = to_float(cd_info.get("marketCapitalization"))
-    market_cap = (mc_raw / 1_000_000) if mc_raw is not None else None
-    mc_cell = ws.cell(row=2, column=9, value=market_cap)
-    mc_cell.fill = data_fill
-    mc_cell.font = label_font
-    mc_cell.number_format = '#,##0'
-    mc_cell.border = thin_border
-
     # Sort years for consistent column ordering
     sorted_years = sorted(cd_data.keys(), key=lambda x: int(x))
 
@@ -271,6 +263,18 @@ def write_company_description(writer, final_output):
         year_cell.fill = label_fill
         year_cell.font = label_font
         year_cell.border = thin_border
+
+    latest_historical_col = start_col + len(sorted_years) - 1 if sorted_years else None
+    if latest_historical_col is not None:
+        shares_outstanding_ref = f"{get_column_letter(latest_historical_col)}16"
+        market_cap_formula = f"=G2*{shares_outstanding_ref}"
+        mc_cell = ws.cell(row=2, column=9, value=market_cap_formula)
+    else:
+        mc_cell = ws.cell(row=2, column=9, value=None)
+    mc_cell.fill = data_fill
+    mc_cell.font = label_font
+    mc_cell.number_format = '#,##0'
+    mc_cell.border = thin_border
 
     # Define metrics that should be displayed in millions
     million_scale_metrics = {
@@ -1767,8 +1771,9 @@ def write_industry_sheet(writer, final_output):
             pb_cell.alignment = center_alignment
             pb_cell.number_format = '#,##0.00'
             
-            # P/E - Reference P/E ratio from Co. Desc sheet directly
-            pe_formula = f"='Co. Desc'!{get_column_letter(most_recent_actual_col)}8"
+            # P/E - Calculate using current price divided by most recent operating EPS
+            operating_eps = f"'Co. Desc'!{get_column_letter(most_recent_actual_col)}5"
+            pe_formula = f"={price}/{operating_eps}"
             pe_cell = ws.cell(row=row, column=6, value=pe_formula)
             pe_cell.font = data_arial_font
             pe_cell.alignment = center_alignment
