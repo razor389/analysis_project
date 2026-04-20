@@ -978,7 +978,7 @@ def main():
             qualities = ""
 
         # moat threat analysis
-        moat_threats = process_moat_threats(ticker, debug=False)
+        moat_threats = process_moat_threats(ticker, debug=False) if not args.ignore_qualities else {}
 
         # Construct final output including qualities
         final_output = {

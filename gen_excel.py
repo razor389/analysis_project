@@ -1029,7 +1029,8 @@ def write_profit_desc_sheet(writer, final_output, no_add_da=False):
     expense_cagr_map = {
         "cost_of_revenue": "cagr_cost_of_revenue_percent",
         "research_and_development": "cagr_research_and_development_percent",
-        "selling_marketing_general_admin": "cagr_selling_marketing_general_admin_percent"
+        "selling_marketing_general_admin": "cagr_selling_marketing_general_admin_percent",
+        "other_expenses": "cagr_other_expenses_percent"
     }
 
     # Write expense breakdown CAGRs

@@ -247,7 +247,14 @@ def extract_series_values_by_year(basic_data: dict, key: str) -> dict:
 
     return result
 
-def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile: dict, reported_currency: str):
+def extract_yoy_data(
+    symbol: str,
+    years: list,
+    segmentation_data: dict,
+    profile: dict,
+    reported_currency: str,
+    include_other_expenses: bool = False,
+):
     # Load the three financial statements
     bs_data = load_json(f"{symbol}_bs_annual.json")
     ic_data = load_json(f"{symbol}_ic_annual.json")
@@ -312,7 +319,13 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
         cost_of_revenue = ic.get('costOfRevenue') or 0
         cost_of_res_and_dev = ic.get('researchAndDevelopmentExpenses') or 0
         cost_of_selling_and_marketing_gen_and_admin = ic.get('sellingGeneralAndAdministrativeExpenses') or 0
-        expenses = cost_of_selling_and_marketing_gen_and_admin + cost_of_res_and_dev + cost_of_revenue
+        other_expenses = ic.get('otherExpenses')
+        expenses = (
+            cost_of_selling_and_marketing_gen_and_admin
+            + cost_of_res_and_dev
+            + cost_of_revenue
+            + ((other_expenses or 0) if include_other_expenses else 0)
+        )
         amort_dep = cf.get('depreciationAndAmortization')
         ebitda = ebit + amort_dep if revenues and expenses and amort_dep else None
         capex = cf.get('capitalExpenditure')
@@ -464,15 +477,19 @@ def extract_yoy_data(symbol: str, years: list, segmentation_data: dict, profile:
             "breakdown": year_segments.get("revenue", {})
         }
 
+        expense_breakdown = {
+            "cost_of_revenue": cost_of_revenue,
+            "research_and_development": cost_of_res_and_dev,
+            "selling_marketing_general_admin": cost_of_selling_and_marketing_gen_and_admin
+        }
+        if include_other_expenses and other_expenses is not None:
+            expense_breakdown["other_expenses"] = other_expenses
+
         profit_description = {
             "revenues": revenues_structured,
             "expenses": {
                 "total_expenses": expenses,
-                "breakdown": {
-                    "cost_of_revenue": cost_of_revenue,
-                    "research_and_development": cost_of_res_and_dev,
-                    "selling_marketing_general_admin": cost_of_selling_and_marketing_gen_and_admin
-                }
+                "breakdown": expense_breakdown
             },
             "ebitda": ebitda,
             "amortization_depreciation": amort_dep,  
@@ -833,6 +850,7 @@ def compute_profit_description_characteristics(yoy_data: dict):
             "cagr_cost_of_revenue_percent": None,
             "cagr_research_and_development_percent": None,
             "cagr_selling_marketing_general_admin_percent": None,
+            "cagr_other_expenses_percent": None,
             # Initialize empty dicts for dynamic breakdown items
             "cagr_external_costs_breakdown_percent": {},
             "cagr_operating_earnings_breakdown_percent": {},
@@ -878,6 +896,7 @@ def compute_profit_description_characteristics(yoy_data: dict):
         "cagr_cost_of_revenue_percent": ("profit_description", "expenses", "breakdown", "cost_of_revenue"),
         "cagr_research_and_development_percent": ("profit_description", "expenses", "breakdown", "research_and_development"),
         "cagr_selling_marketing_general_admin_percent": ("profit_description", "expenses", "breakdown", "selling_marketing_general_admin"),
+        "cagr_other_expenses_percent": ("profit_description", "expenses", "breakdown", "other_expenses"),
     }
 
     # Calculate CAGR for predefined metrics
@@ -1219,50 +1238,52 @@ def process_moat_threats(symbol, debug=False):
         return {}
 
 def process_qualities(symbol, ignore_qualities=False, debug=False, email_lookback_years=15):
-    if not ignore_qualities:
-        # Fetch and filter data
-        fetch_all_for_ticker(symbol)
-        filter_emails_by_config(symbol, lookback_years=email_lookback_years)
-        
-        # Define filenames
-        posts_filename = os.path.join("output", f"{symbol}_posts.json")
-        emails_filename = os.path.join("output", f"{symbol}_sent_emails.json")
-        combined_filename = os.path.join("output", f"{symbol}_combined_debug.json")
-        
-        try:
-            # Initialize combined data
-            combined_data = []
+    if ignore_qualities:
+        return ""
 
-            # Load posts if the file exists
-            if os.path.exists(posts_filename):
-                with open(posts_filename, "r", encoding="utf-8") as f:
-                    posts = json.load(f)
-                    combined_data.extend(posts)
+    # Fetch and filter data
+    fetch_all_for_ticker(symbol)
+    filter_emails_by_config(symbol, lookback_years=email_lookback_years)
+    
+    # Define filenames
+    posts_filename = os.path.join("output", f"{symbol}_posts.json")
+    emails_filename = os.path.join("output", f"{symbol}_sent_emails.json")
+    combined_filename = os.path.join("output", f"{symbol}_combined_debug.json")
+    
+    try:
+        # Initialize combined data
+        combined_data = []
 
-            # Load emails if the file exists
-            if os.path.exists(emails_filename):
-                with open(emails_filename, "r", encoding="utf-8") as f:
-                    emails = json.load(f)
-                    combined_data.extend(emails)
+        # Load posts if the file exists
+        if os.path.exists(posts_filename):
+            with open(posts_filename, "r", encoding="utf-8") as f:
+                posts = json.load(f)
+                combined_data.extend(posts)
 
-            # Optionally write combined data to a debug file
-            if debug:
-                with open(combined_filename, "w", encoding="utf-8") as f:
-                    json.dump(combined_data, f, indent=4)
-                print(f"Combined data written to {combined_filename} for debugging.")
+        # Load emails if the file exists
+        if os.path.exists(emails_filename):
+            with open(emails_filename, "r", encoding="utf-8") as f:
+                emails = json.load(f)
+                combined_data.extend(emails)
 
-            if combined_data:
-                # Call your existing generate_post_summary() function
-                print(f"Attempting to generate post summaries for {symbol}")
-                # Sort posts by timestamp (most recent first)
-                return generate_post_summary(combined_data, symbol)
-            else:
-                print(f"No posts or emails found for {symbol}. Skipping summary.")
-                return "No forum summary available."
+        # Optionally write combined data to a debug file
+        if debug:
+            with open(combined_filename, "w", encoding="utf-8") as f:
+                json.dump(combined_data, f, indent=4)
+            print(f"Combined data written to {combined_filename} for debugging.")
 
-        except Exception as e:
-            print(f"Error processing data for {symbol}: {e}")
-            return "Error generating summary."
+        if combined_data:
+            # Call your existing generate_post_summary() function
+            print(f"Attempting to generate post summaries for {symbol}")
+            # Sort posts by timestamp (most recent first)
+            return generate_post_summary(combined_data, symbol)
+        else:
+            print(f"No posts or emails found for {symbol}. Skipping summary.")
+            return "No forum summary available."
+
+    except Exception as e:
+        print(f"Error processing data for {symbol}: {e}")
+        return "Error generating summary."
 
 def finalize_output(rearranged_output):
     """
@@ -1277,6 +1298,11 @@ if __name__ == "__main__":
     parser.add_argument('symbol', type=str, help='Stock ticker symbol')
     parser.add_argument('start_year', type=int, help='Start year for analysis')
     parser.add_argument('--ignore_qualities', action='store_true', help='Skip qualities analysis')
+    parser.add_argument(
+        '--include_other_expenses',
+        action='store_true',
+        help='Include income statement otherExpenses in internal costs'
+    )
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--basic_segmentation', action='store_true', 
                        help='Use basic FMP segmentation instead of unified')
@@ -1379,7 +1405,8 @@ if __name__ == "__main__":
 
     # Extract YOY data
     yoy_data = extract_yoy_data(symbol, years_to_extract, 
-                                segmentation_data, profile, reported_currency)
+                                segmentation_data, profile, reported_currency,
+                                include_other_expenses=args.include_other_expenses)
 
     # Compute Investment Characteristics
     investment_characteristics = compute_investment_characteristics(yoy_data)
@@ -1444,8 +1471,9 @@ if __name__ == "__main__":
     final_output["qualities"] = qualities
 
     # moat threat analysis
-    moat_threats = process_moat_threats(symbol, debug=debug)
-    final_output["moat_threat"] = moat_threats
+    if not ignore_qualities:
+        moat_threats = process_moat_threats(symbol, debug=debug)
+        final_output["moat_threat"] = moat_threats
 
     rearranged_output = transform_final_output(final_output, stock_price=current_stock_price)
     # rearranged_output = finalize_output(rearranged_output)  # apply normalization
