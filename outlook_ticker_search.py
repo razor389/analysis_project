@@ -1,10 +1,11 @@
 import win32com.client
+import argparse
 import json
 import logging
 import sys
 from typing import List, Dict, Any, Set, Optional, Iterable, Tuple
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 from dotenv import load_dotenv
 
@@ -274,7 +275,8 @@ def filter_emails(
     items_sources: List[Tuple[str, Any]],
     primary_ticker: str,
     search_terms: Set[str],
-    lookback_years: int = 15,
+    min_year: int = 2018,
+    max_emails: Optional[int] = None,
     require_sender_match: bool = True,
 ) -> List[Dict[str, Any]]:
     """
@@ -284,8 +286,13 @@ def filter_emails(
     processed_count = 0
     seen_emails = set()
 
-    # Define cutoff (naive)
-    cutoff_date = to_naive(datetime.now() - timedelta(days=lookback_years * 365))
+    if min_year < 1:
+        raise ValueError(f"min_year must be >= 1, got {min_year}")
+    if max_emails is not None and max_emails <= 0:
+        raise ValueError(f"max_emails must be > 0 when provided, got {max_emails}")
+
+    # Define cutoff as the start of the selected year.
+    cutoff_date = datetime(min_year, 1, 1)
 
     patterns = {
         term: re.compile(r"\b" + re.escape(term) + r"\b", re.IGNORECASE)
@@ -358,12 +365,18 @@ def filter_emails(
             if processed_count % 1000 == 0:
                 logging.info(f"Processed {processed_count} messages...")
 
+    filtered_emails.sort(key=lambda email: email.get("timestamp", 0), reverse=True)
+
+    if max_emails is not None:
+        filtered_emails = filtered_emails[:max_emails]
+
     return filtered_emails
 
 def filter_emails_by_config(
     ticker: str,
     config_path: str = "ticker_email_config.json",
-    lookback_years: int = 15,
+    min_year: int = 2018,
+    max_emails: Optional[int] = None,
 ) -> str:
     """
     Main function to filter sent emails by ticker and its related terms from config.
@@ -394,7 +407,8 @@ def filter_emails_by_config(
         items_sources=items_sources,
         primary_ticker=ticker,
         search_terms=search_terms,
-        lookback_years=lookback_years,
+        min_year=min_year,
+        max_emails=max_emails,
         require_sender_match=True,  # recommended
     )
 
@@ -411,6 +425,9 @@ def filter_emails_by_config(
 
     email_count = len(filtered_emails)
     print(f"\nFound {email_count} sent emails from {SENDER_EMAIL} containing search terms for '{ticker}'")
+    print(f"Included emails from {min_year} or later.")
+    if max_emails is not None:
+        print(f"Applied max email cap of {max_emails}, keeping the newest matches.")
     print(f"Results saved to: {output_file}")
 
     return output_file
@@ -419,12 +436,24 @@ def filter_emails_by_config(
 def main():
     """Command-line interface for filtering emails by ticker."""
     try:
-        if len(sys.argv) != 2:
-            print("Usage: python outlook_ticker_search.py TICKER")
-            sys.exit(1)
+        parser = argparse.ArgumentParser(description="Filter Outlook sent emails by ticker")
+        parser.add_argument("ticker", type=str, help="Ticker symbol")
+        parser.add_argument(
+            "--min_year",
+            type=int,
+            default=2018,
+            help="Only include emails sent in this year or later (default: 2018)",
+        )
+        parser.add_argument(
+            "--max_emails",
+            type=int,
+            default=None,
+            help="Optional cap on matched emails; keeps the newest emails and drops older overflow",
+        )
+        args = parser.parse_args()
 
-        ticker = sys.argv[1].upper()
-        filter_emails_by_config(ticker)
+        ticker = args.ticker.upper()
+        filter_emails_by_config(ticker, min_year=args.min_year, max_emails=args.max_emails)
 
     except ValueError as ve:
         logging.error(f"Validation Error: {ve}")

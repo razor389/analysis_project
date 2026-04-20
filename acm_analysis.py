@@ -1237,13 +1237,13 @@ def process_moat_threats(symbol, debug=False):
         print(f"Error processing moat threats: {e}")
         return {}
 
-def process_qualities(symbol, ignore_qualities=False, debug=False, email_lookback_years=15):
+def process_qualities(symbol, ignore_qualities=False, debug=False, email_min_year=2018, email_max_count=None):
     if ignore_qualities:
         return ""
 
     # Fetch and filter data
     fetch_all_for_ticker(symbol)
-    filter_emails_by_config(symbol, lookback_years=email_lookback_years)
+    filter_emails_by_config(symbol, min_year=email_min_year, max_emails=email_max_count)
     
     # Define filenames
     posts_filename = os.path.join("output", f"{symbol}_posts.json")
@@ -1309,10 +1309,16 @@ if __name__ == "__main__":
     parser.add_argument('--no_add_da', action='store_true',
                        help='When calculating EBITDA, do not add back depreciation and amortization')
     parser.add_argument(
-        '--email_lookback_years',
+        '--email_min_year',
         type=int,
-        default=15,
-        help='Number of years to look back when processing Outlook emails for qualities (default: 15)'
+        default=2018,
+        help='Only include Outlook emails sent in this year or later when processing qualities (default: 2018)'
+    )
+    parser.add_argument(
+        '--email_max_count',
+        type=int,
+        default=None,
+        help='Optional cap on matched Outlook emails for qualities; keeps the newest emails and drops older overflow'
     )
     args = parser.parse_args()
 
@@ -1467,7 +1473,13 @@ if __name__ == "__main__":
     }
 
     # Process qualities
-    qualities = process_qualities(symbol, ignore_qualities=ignore_qualities, debug=debug, email_lookback_years=args.email_lookback_years)
+    qualities = process_qualities(
+        symbol,
+        ignore_qualities=ignore_qualities,
+        debug=debug,
+        email_min_year=args.email_min_year,
+        email_max_count=args.email_max_count,
+    )
     final_output["qualities"] = qualities
 
     # moat threat analysis

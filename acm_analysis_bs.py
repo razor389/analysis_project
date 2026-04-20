@@ -830,10 +830,16 @@ def main():
     parser.add_argument("--ignore_qualities", action="store_true",
                         help="Skip processing qualities analysis")
     parser.add_argument(
-        '--email_lookback_years',
+        '--email_min_year',
         type=int,
-        default=15,
-        help='Number of years to look back when processing Outlook emails for qualities (default: 15)'
+        default=2018,
+        help='Only include Outlook emails sent in this year or later when processing qualities (default: 2018)'
+    )
+    parser.add_argument(
+        '--email_max_count',
+        type=int,
+        default=None,
+        help='Optional cap on matched Outlook emails for qualities; keeps the newest emails and drops older overflow'
     )
     args = parser.parse_args()
     
@@ -973,7 +979,13 @@ def main():
 
         # Process qualities using the same function as in acm_analysis unless flag is set
         if not args.ignore_qualities:
-            qualities = process_qualities(ticker, ignore_qualities=args.ignore_qualities, debug=False, email_lookback_years=args.email_lookback_years)
+            qualities = process_qualities(
+                ticker,
+                ignore_qualities=args.ignore_qualities,
+                debug=False,
+                email_min_year=args.email_min_year,
+                email_max_count=args.email_max_count,
+            )
         else:
             qualities = ""
 
