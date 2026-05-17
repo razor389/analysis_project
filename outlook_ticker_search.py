@@ -1,4 +1,3 @@
-import win32com.client
 import argparse
 import json
 import logging
@@ -7,7 +6,17 @@ from typing import List, Dict, Any, Set, Optional, Iterable, Tuple
 import re
 from datetime import datetime
 import os
-from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv():
+        return False
+
+try:
+    import win32com.client
+except ImportError:
+    win32com = None
 
 # Create output directory if it doesn't exist
 os.makedirs("output", exist_ok=True)
@@ -25,11 +34,7 @@ load_dotenv()
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 EXCLUDED_EMAIL = "derekr@academycapitalmgmt.com".lower()
 
-if not SENDER_EMAIL:
-    logging.error("SENDER_EMAIL not found in .env file")
-    sys.exit(1)
-
-SENDER_EMAIL = SENDER_EMAIL.strip().lower()
+SENDER_EMAIL = (SENDER_EMAIL or "").strip().lower()
 
 # MAPI property tags for SMTP addresses (works better than SenderEmailAddress for Exchange)
 PR_SENDER_SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x5D01001E"
@@ -98,6 +103,10 @@ def email_to_unix(email_dt: datetime) -> int:
 
 def initialize_outlook():
     """Initialize and return the Outlook namespace."""
+    if win32com is None:
+        logging.error("pywin32 is required for Outlook access. Install it with: pip install pywin32")
+        sys.exit(1)
+
     try:
         outlook = win32com.client.Dispatch("Outlook.Application")
         namespace = outlook.GetNamespace("MAPI")
@@ -344,6 +353,112 @@ def discover_sent_folders(root_folder) -> Iterable[Any]:
         stack.extend(reversed(children))
 
 
+def iter_folder_tree(root_folder, max_depth: Optional[int] = None) -> Iterable[Tuple[Any, int]]:
+    """Yield every folder under root_folder with depth, best-effort."""
+    stack: List[Tuple[Any, int]] = [(root_folder, 0)]
+    seen_paths: Set[str] = set()
+
+    while stack:
+        folder, depth = stack.pop()
+        path = get_folder_path(folder)
+        if path in seen_paths:
+            continue
+        seen_paths.add(path)
+
+        yield folder, depth
+
+        if max_depth is not None and depth >= max_depth:
+            continue
+
+        children = list(iter_child_folders(folder) or [])
+        for child in reversed(children):
+            stack.append((child, depth + 1))
+
+
+def get_folder_item_count(folder) -> Optional[int]:
+    """Return folder.Items.Count when available."""
+    try:
+        items = safe_getattr(folder, "Items", None)
+        if items is None:
+            return None
+        return safe_getattr(items, "Count", None)
+    except Exception:
+        return None
+
+
+def get_folder_store_name(folder) -> str:
+    """Return the owning Outlook store name when available."""
+    store = safe_getattr(folder, "Store", None)
+    name = safe_getattr(store, "DisplayName", None)
+    if name:
+        return str(name)
+    return ""
+
+
+def get_folder_diagnostic_entry(folder, depth: int) -> Dict[str, Any]:
+    """Build a serializable diagnostic row for a folder."""
+    name = str(safe_getattr(folder, "Name", "") or "")
+    entry_id = safe_getattr(folder, "EntryID", None)
+    store_id = safe_getattr(folder, "StoreID", None)
+
+    return {
+        "depth": depth,
+        "name": name,
+        "path": get_folder_path(folder),
+        "store": get_folder_store_name(folder),
+        "itemCount": get_folder_item_count(folder),
+        "class": safe_getattr(folder, "Class", None),
+        "defaultItemType": safe_getattr(folder, "DefaultItemType", None),
+        "sentNameMatch": is_sent_folder_name(name),
+        "entryId": str(entry_id) if entry_id else None,
+        "storeId": str(store_id) if store_id else None,
+    }
+
+
+def dump_outlook_folder_diagnostics(
+    namespace,
+    output_path: str = os.path.join("output", "outlook_folders.json"),
+    max_depth: Optional[int] = None,
+) -> str:
+    """Write all Outlook folders visible to this profile to JSON."""
+    rows: List[Dict[str, Any]] = []
+
+    try:
+        for root_folder in namespace.Folders:
+            try:
+                for folder, depth in iter_folder_tree(root_folder, max_depth=max_depth):
+                    rows.append(get_folder_diagnostic_entry(folder, depth))
+            except Exception as e:
+                logging.warning(f"Unable to inspect folder tree {get_folder_path(root_folder)}: {e}")
+    except Exception as e:
+        logging.error(f"Unable to enumerate Outlook folders: {e}")
+
+    rows.sort(
+        key=lambda row: (
+            -1 if row.get("itemCount") is None else -int(row.get("itemCount") or 0),
+            row.get("path") or "",
+        )
+    )
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(rows, f, indent=4, ensure_ascii=False)
+
+    print(f"Outlook folder diagnostics saved to: {output_path}")
+    print(f"Folders visible to Outlook COM: {len(rows)}")
+
+    sent_matches = [row for row in rows if row.get("sentNameMatch")]
+    print(f"Sent-name folder matches: {len(sent_matches)}")
+    for row in sent_matches[:25]:
+        print(f"SENT? Count={row.get('itemCount')} Path={row.get('path')}")
+
+    print("\nLargest visible folders:")
+    for row in rows[:25]:
+        print(f"Count={row.get('itemCount')} Path={row.get('path')}")
+
+    return output_path
+
+
 def build_items_sources(namespace) -> List[Tuple[str, Any]]:
     """
     Return list of (source_name, ItemsCollection) for Sent folders.
@@ -512,6 +627,9 @@ def filter_emails_by_config(
     Main function to filter sent emails by ticker and its related terms from config.
     If ticker not in config, searches for just the ticker symbol.
     """
+    if not SENDER_EMAIL:
+        raise ValueError("SENDER_EMAIL not found in environment or .env file")
+
     ticker = ticker.upper()
 
     # Validate ticker format
@@ -567,7 +685,7 @@ def main():
     """Command-line interface for filtering emails by ticker."""
     try:
         parser = argparse.ArgumentParser(description="Filter Outlook sent emails by ticker")
-        parser.add_argument("ticker", type=str, help="Ticker symbol")
+        parser.add_argument("ticker", type=str, nargs="?", help="Ticker symbol")
         parser.add_argument(
             "--min_year",
             type=int,
@@ -580,7 +698,35 @@ def main():
             default=None,
             help="Optional cap on matched emails; keeps the newest emails and drops older overflow",
         )
+        parser.add_argument(
+            "--list_folders",
+            action="store_true",
+            help="Dump every Outlook folder visible to COM with item counts, then exit",
+        )
+        parser.add_argument(
+            "--folder_output",
+            default=os.path.join("output", "outlook_folders.json"),
+            help="Output path for --list_folders diagnostics",
+        )
+        parser.add_argument(
+            "--folder_max_depth",
+            type=int,
+            default=None,
+            help="Optional max folder depth for --list_folders",
+        )
         args = parser.parse_args()
+
+        if args.list_folders:
+            namespace = initialize_outlook()
+            dump_outlook_folder_diagnostics(
+                namespace,
+                output_path=args.folder_output,
+                max_depth=args.folder_max_depth,
+            )
+            return
+
+        if not args.ticker:
+            parser.error("ticker is required unless --list_folders is used")
 
         ticker = args.ticker.upper()
         filter_emails_by_config(ticker, min_year=args.min_year, max_emails=args.max_emails)
