@@ -35,6 +35,14 @@ SENDER_EMAIL = SENDER_EMAIL.strip().lower()
 PR_SENDER_SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x5D01001E"
 PR_RECEIVED_BY_SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x5D07001E"
 PR_SENT_REPRESENTING_SMTP_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x5D02001E"
+OL_FOLDER_SENT_MAIL = 5
+SENT_FOLDER_NAMES = {
+    "sent",
+    "sent items",
+    "sent mail",
+    "sent messages",
+    "sent e-mail",
+}
 
 
 def safe_getattr(obj, name, default=None):
@@ -215,59 +223,181 @@ def clean_message(raw_message: str) -> str:
     return cleaned.strip()
 
 
+def normalize_folder_name(name: Any) -> str:
+    """Normalize an Outlook folder name for matching."""
+    return str(name or "").strip().lower()
+
+
+def is_sent_folder_name(name: Any) -> bool:
+    """Return True for common Outlook/Gmail/IMAP sent folder names."""
+    normalized = normalize_folder_name(name)
+    if normalized in SENT_FOLDER_NAMES:
+        return True
+
+    return normalized.startswith(
+        (
+            "sent items ",
+            "sent items (",
+            "sent mail ",
+            "sent mail (",
+            "sent messages ",
+            "sent messages (",
+            "sent e-mail ",
+            "sent e-mail (",
+        )
+    )
+
+
+def get_folder_path(folder) -> str:
+    """Build a best-effort display path for a COM folder."""
+    names: List[str] = []
+    current = folder
+    seen_ids: Set[int] = set()
+
+    for _ in range(25):
+        if current is None:
+            break
+
+        object_id = id(current)
+        if object_id in seen_ids:
+            break
+        seen_ids.add(object_id)
+
+        name = safe_getattr(current, "Name", None)
+        if name:
+            names.append(str(name))
+
+        parent = safe_getattr(current, "Parent", None)
+        if parent is None:
+            break
+        current = parent
+
+    return " / ".join(reversed(names)) if names else "Unknown Sent Folder"
+
+
+def get_folder_key(folder) -> str:
+    """Return a stable key for de-duplicating Outlook folders."""
+    entry_id = safe_getattr(folder, "EntryID", None)
+    store_id = safe_getattr(folder, "StoreID", None)
+    if entry_id:
+        return f"{store_id or ''}:{entry_id}"
+    return get_folder_path(folder)
+
+
+def add_sent_folder_source(sources: List[Tuple[str, Any]], seen_folders: Set[str], folder) -> None:
+    """Add a sent folder's Items collection to sources once."""
+    if folder is None:
+        return
+
+    folder_key = get_folder_key(folder)
+    if folder_key in seen_folders:
+        return
+    seen_folders.add(folder_key)
+
+    try:
+        items = folder.Items
+    except Exception as e:
+        logging.warning(f"Unable to read Items for sent folder {get_folder_path(folder)}: {e}")
+        return
+
+    try:
+        items.Sort("[SentOn]", True)
+    except Exception:
+        pass
+
+    source_name = get_folder_path(folder)
+    count = safe_getattr(items, "Count", None)
+    if count is not None:
+        source_name = f"{source_name} (Count={count})"
+
+    sources.append((source_name, items))
+
+
+def iter_child_folders(folder) -> Iterable[Any]:
+    """Yield direct child folders from an Outlook folder, best-effort."""
+    try:
+        folders = safe_getattr(folder, "Folders", None)
+        if folders is None:
+            return
+        for child in folders:
+            yield child
+    except Exception:
+        return
+
+
+def discover_sent_folders(root_folder) -> Iterable[Any]:
+    """Recursively yield folders whose names look like Sent folders."""
+    stack = [root_folder]
+    seen_paths: Set[str] = set()
+
+    while stack:
+        folder = stack.pop()
+        path = get_folder_path(folder)
+        if path in seen_paths:
+            continue
+        seen_paths.add(path)
+
+        if is_sent_folder_name(safe_getattr(folder, "Name", "")):
+            yield folder
+
+        children = list(iter_child_folders(folder) or [])
+        stack.extend(reversed(children))
+
+
 def build_items_sources(namespace) -> List[Tuple[str, Any]]:
     """
-    Return list of (source_name, ItemsCollection) for Sent Items.
-    Recommended change: search Sent Items across ALL stores, so multi-account/shared mailbox works.
+    Return list of (source_name, ItemsCollection) for Sent folders.
+
+    Outlook accounts can expose the real sent folder as a store default, a
+    top-level "Sent Items" folder, or a nested IMAP/Gmail folder named
+    "Sent Mail". Check all of those and de-duplicate by folder EntryID.
     """
     sources: List[Tuple[str, Any]] = []
+    seen_folders: Set[str] = set()
 
-    # Try all stores
+    # Include the profile default first.
+    try:
+        add_sent_folder_source(
+            sources,
+            seen_folders,
+            namespace.GetDefaultFolder(OL_FOLDER_SENT_MAIL),
+        )
+    except Exception as e:
+        logging.warning(f"Unable to read profile default Sent folder: {e}")
+
+    # Include per-store default Sent folders when Outlook exposes Stores.
+    try:
+        stores = safe_getattr(namespace, "Stores", None)
+        if stores:
+            for store in stores:
+                try:
+                    add_sent_folder_source(
+                        sources,
+                        seen_folders,
+                        store.GetDefaultFolder(OL_FOLDER_SENT_MAIL),
+                    )
+                except Exception:
+                    continue
+    except Exception as e:
+        logging.warning(f"Failed to enumerate Outlook stores: {e}")
+
+    # Search all mailbox roots for common Sent folder names, including nested
+    # IMAP/Gmail layouts such as "[Gmail] / Sent Mail".
     try:
         top_folders = namespace.Folders
-        for store in top_folders:
+        for root_folder in top_folders:
             try:
-                store_name = str(safe_getattr(store, "Name", "UnknownStore"))
-                sent_folder = None
-
-                # Most common English name
-                try:
-                    sent_folder = store.Folders["Sent Items"]
-                except Exception:
-                    sent_folder = None
-
-                if sent_folder is None:
-                    continue
-
-                items = sent_folder.Items
-                # Sort descending by SentOn
-                try:
-                    items.Sort("[SentOn]", True)
-                except Exception:
-                    pass
-
-                count = safe_getattr(items, "Count", None)
-                if count is None:
-                    sources.append((f"{store_name} / Sent Items", items))
-                else:
-                    sources.append((f"{store_name} / Sent Items (Count={count})", items))
+                for sent_folder in discover_sent_folders(root_folder):
+                    add_sent_folder_source(sources, seen_folders, sent_folder)
             except Exception:
                 continue
     except Exception as e:
-        logging.warning(f"Failed to enumerate stores. Falling back to default Sent Items. Error: {e}")
+        logging.warning(f"Failed to recursively enumerate Sent folders: {e}")
 
-    # Fallback: default Sent Items
-    if not sources:
-        try:
-            sent_folder = namespace.GetDefaultFolder(5)  # 5 = olFolderSentMail
-            items = sent_folder.Items
-            try:
-                items.Sort("[SentOn]", True)
-            except Exception:
-                pass
-            sources.append(("Default Store / Sent Items", items))
-        except Exception as e:
-            logging.error(f"Error fetching default Sent Items: {e}")
+    if sources:
+        logging.info(f"Discovered {len(sources)} Sent folder source(s).")
+    else:
+        logging.error("No Sent folders found.")
 
     return sources
 
