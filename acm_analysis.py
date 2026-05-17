@@ -1241,9 +1241,14 @@ def process_qualities(symbol, ignore_qualities=False, debug=False, email_min_yea
     if ignore_qualities:
         return ""
 
+    if email_max_count is not None and email_max_count <= 0:
+        raise ValueError(f"email_max_count must be > 0 when provided, got {email_max_count}")
+
     # Fetch and filter data
     fetch_all_for_ticker(symbol)
-    filter_emails_by_config(symbol, min_year=email_min_year, max_emails=email_max_count)
+    # Always scan and persist every matching email. The cap is applied only to
+    # the email records sent to the summarizer below.
+    filter_emails_by_config(symbol, min_year=email_min_year, max_emails=None)
     
     # Define filenames
     posts_filename = os.path.join("output", f"{symbol}_posts.json")
@@ -1264,6 +1269,17 @@ def process_qualities(symbol, ignore_qualities=False, debug=False, email_min_yea
         if os.path.exists(emails_filename):
             with open(emails_filename, "r", encoding="utf-8") as f:
                 emails = json.load(f)
+                all_email_count = len(emails)
+                if email_max_count is not None:
+                    emails = sorted(
+                        emails,
+                        key=lambda item: item.get("timestamp", 0),
+                        reverse=True,
+                    )[:email_max_count]
+                    print(
+                        f"Loaded {all_email_count} matching emails for {symbol}; "
+                        f"feeding newest {len(emails)} emails to summarizer."
+                    )
                 combined_data.extend(emails)
 
         # Optionally write combined data to a debug file
@@ -1318,7 +1334,7 @@ if __name__ == "__main__":
         '--email_max_count',
         type=int,
         default=None,
-        help='Optional cap on matched Outlook emails for qualities; keeps the newest emails and drops older overflow'
+        help='Optional cap on matched Outlook emails fed to the qualities summarizer; Outlook search remains uncapped'
     )
     args = parser.parse_args()
 

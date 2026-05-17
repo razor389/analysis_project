@@ -839,7 +839,7 @@ def main():
         '--email_max_count',
         type=int,
         default=None,
-        help='Optional cap on matched Outlook emails for qualities; keeps the newest emails and drops older overflow'
+        help='Optional cap on matched Outlook emails fed to the qualities summarizer; Outlook search remains uncapped'
     )
     args = parser.parse_args()
     
