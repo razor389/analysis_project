@@ -5,6 +5,7 @@ import json
 import time
 import requests
 import logging
+import unicodedata
 from dotenv import load_dotenv
 from requests.exceptions import Timeout, RequestException
 
@@ -16,6 +17,20 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+def normalize_api_text(value):
+    """Normalize API text values and remove invisible format characters."""
+    if not isinstance(value, str):
+        return value
+    without_format_chars = ''.join(
+        char for char in value if unicodedata.category(char) != 'Cf'
+    )
+    return ' '.join(unicodedata.normalize('NFKC', without_format_chars).split())
+
+def safe_market_cap(stock):
+    """Return a numeric market cap for sorting, treating missing values as zero."""
+    market_cap = stock.get('marketCap') if isinstance(stock, dict) else None
+    return market_cap if isinstance(market_cap, (int, float)) else 0
 
 def load_api_key():
     """Load the API key from the .env file."""
@@ -194,7 +209,10 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file=False):
         raise
 
     profile = response.json()[0]
-    industry = profile.get("industry")
+    raw_industry = profile.get("industry")
+    industry = normalize_api_text(raw_industry)
+    if industry != raw_industry:
+        logger.info(f"Normalized industry from {raw_industry!r} to {industry!r}")
     logger.info(f"Industry identified: {industry}")
     
     # Get peers via the screener endpoint
@@ -212,9 +230,9 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file=False):
         raise
 
     peers = response.json()
-    sorted_peers = sorted(peers, key=lambda x: x.get('marketCap', 0), reverse=True)
+    sorted_peers = sorted(peers, key=safe_market_cap, reverse=True)
     
-    searched_company = next((p for p in sorted_peers if p['symbol'] == ticker), None)
+    searched_company = next((p for p in sorted_peers if p.get('symbol') == ticker), None)
     company_name = searched_company.get('companyName') if searched_company else None
     logger.info(f"Found company: {company_name}")
     
