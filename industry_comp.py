@@ -6,10 +6,11 @@ import time
 import requests
 import logging
 import unicodedata
+import yfinance as yf
 from dotenv import load_dotenv
 from requests.exceptions import Timeout, RequestException
 
-from utils import get_current_quote_yahoo, get_yahoo_ticker, get_yearly_high_low_yahoo
+from utils import get_yahoo_ticker, get_yearly_high_low_yahoo
 
 # Configure logging
 logging.basicConfig(
@@ -31,6 +32,90 @@ def safe_market_cap(stock):
     """Return a numeric market cap for sorting, treating missing values as zero."""
     market_cap = stock.get('marketCap') if isinstance(stock, dict) else None
     return market_cap if isinstance(market_cap, (int, float)) else 0
+
+def normalize_currency_code(value):
+    """Normalize currency codes while preserving Yahoo's non-ISO GBp pence code."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    return value if value == "GBp" else value.upper()
+
+def get_current_quote_details_yahoo(symbol):
+    """Fetch current Yahoo price, quote currency, and shares outstanding."""
+    try:
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        return (
+            info.get('currentPrice'),
+            normalize_currency_code(info.get('currency')),
+            info.get('sharesOutstanding')
+        )
+    except Exception as e:
+        print(f"Error fetching current quote details for {symbol}: {e}")
+        return None, None, None
+
+def blank_market_statistics():
+    return {
+        "P/B": None,
+        "P/E": None,
+        "Div. Yld.": None,
+        "EV/Sales": None
+    }
+
+def get_reported_currency(financial_data):
+    """Use statement currency as the source of truth for financial denominators."""
+    for statement_key in ("ic", "bs", "cf"):
+        statement = financial_data.get(statement_key) or {}
+        currency = normalize_currency_code(statement.get('reportedCurrency'))
+        if currency:
+            return currency
+    return None
+
+def resolve_yahoo_ticker(ticker, profile, adr_mapping):
+    """Prefer explicit ADR-to-ordinary mapping over FMP's ADR flag."""
+    mapped_ticker = (adr_mapping or {}).get(ticker)
+    if mapped_ticker:
+        return mapped_ticker
+    return get_yahoo_ticker(profile)
+
+def should_calculate_market_stats(ticker, profile, yahoo_ticker, reported_currency, quote_currency, adr_mapping):
+    """Validate that Yahoo prices and FMP statement values are in the same currency."""
+    if not reported_currency:
+        print(f"ERROR: Missing reported currency for {ticker}; market statistics will be blank.")
+        return False
+
+    if not quote_currency:
+        print(f"ERROR: Missing Yahoo quote currency for {ticker} ({yahoo_ticker}); market statistics will be blank.")
+        return False
+
+    if reported_currency == quote_currency:
+        return True
+
+    mapped_ticker = adr_mapping.get(ticker) if adr_mapping else None
+
+    if mapped_ticker:
+        print(
+            f"ERROR: Currency mismatch for {ticker}: ADR mapping points to {mapped_ticker}, "
+            f"but Yahoo quote currency is {quote_currency} and financials are reported in "
+            f"{reported_currency}. Market statistics will be blank."
+        )
+    elif profile.get("isAdr", False):
+        print(
+            f"ERROR: Currency mismatch for {ticker}: financials are reported in "
+            f"{reported_currency} but Yahoo quote {yahoo_ticker} is in {quote_currency}. "
+            f"Add {ticker} to adr_to_ord_mapping.json if an ordinary-share ticker should be used. "
+            f"Market statistics will be blank."
+        )
+    else:
+        print(
+            f"ERROR: Currency mismatch for {ticker}: financials are reported in "
+            f"{reported_currency} but Yahoo quote {yahoo_ticker} is in {quote_currency}. "
+            f"No ADR mapping applies. Market statistics will be blank."
+        )
+
+    return False
 
 def load_api_key():
     """Load the API key from the .env file."""
@@ -88,20 +173,41 @@ def get_financial_data(ticker, api_key):
             data[key] = None
     return data
 
-def calculate_statistics(ticker, financial_data):
+def calculate_statistics(ticker, financial_data, adr_mapping=None):
     """Calculate operating and market statistics for a ticker."""
     logger.info(f"Calculating statistics for ticker: {ticker}")
     try:
-        ic = financial_data.get('ic', {})
-        bs = financial_data.get('bs', {})
-        cf = financial_data.get('cf', {})
-        profile = financial_data.get('profile', {})
+        financial_data = financial_data or {}
+        ic = financial_data.get('ic')
+        bs = financial_data.get('bs')
+        cf = financial_data.get('cf') or {}
+        profile = financial_data.get('profile') or {}
+
+        if not ic or not bs:
+            print(f"ERROR: Missing financial statements for {ticker}; industry statistics will be skipped.")
+            return None
+
+        if not profile and not (adr_mapping or {}).get(ticker):
+            print(f"ERROR: Missing company profile for {ticker}; industry statistics will be skipped.")
+            return None
         
-        yahoo_ticker = get_yahoo_ticker(profile)
-        current_stock_price = get_current_quote_yahoo(yahoo_ticker)
+        adr_mapping = adr_mapping or {}
+        mapped_ticker = adr_mapping.get(ticker)
+        yahoo_ticker = resolve_yahoo_ticker(ticker, profile, adr_mapping)
+        current_stock_price, quote_currency, yahoo_shares_outstanding = get_current_quote_details_yahoo(yahoo_ticker)
+        reported_currency = get_reported_currency(financial_data)
         
         # Basic financial metrics
         shares_outstanding = ic.get('weightedAverageShsOut', 0)
+        market_shares_outstanding = shares_outstanding
+        if mapped_ticker:
+            if yahoo_shares_outstanding:
+                market_shares_outstanding = yahoo_shares_outstanding
+            else:
+                print(
+                    f"ERROR: Missing Yahoo shares outstanding for mapped ADR {ticker} "
+                    f"({yahoo_ticker}); market statistics will be blank."
+                )
         revenues = ic.get('revenue', 0)
         net_profit = ic.get('netIncome', 0)
         cost_of_revenue = ic.get('costOfRevenue') or 0
@@ -130,27 +236,49 @@ def calculate_statistics(ticker, financial_data):
         years_payback = ((lt_debt - addback) / net_profit) if net_profit else None
         logger.debug(f"Operating metrics - Margin: {operating_margin}, ROC: {roc}, Years payback: {years_payback}")
         
-        # Market Statistics Calculations
-        book_value_per_share = shareholder_equity / shares_outstanding if shares_outstanding else 0
-        pb_ratio = current_stock_price / book_value_per_share if book_value_per_share else 0
-        operating_eps = net_profit / shares_outstanding if shares_outstanding else 0
-        pe_ratio = current_stock_price / operating_eps if operating_eps else 0
-        
-        statement_date = ic.get('date')
-        statement_year = int(statement_date.split('-')[0]) if statement_date else datetime.datetime.now().year
-        
-        yearly_high, yearly_low = get_yearly_high_low_yahoo(yahoo_ticker, statement_year)
-        average_price = (yearly_high + yearly_low) / 2 if (yearly_high is not None and yearly_low is not None) else current_stock_price
-        
-        dividends_paid = -1 * cf.get('dividendsPaid', 0)
-        dividends_per_share = dividends_paid / shares_outstanding if shares_outstanding else 0
-        div_yield = (dividends_per_share / average_price) if average_price else 0
-        
-        market_cap = current_stock_price * shares_outstanding
-        ev_sales = ((market_cap + lt_debt) / revenues) if revenues else 0
-        
-        logger.debug(f"Market metrics - P/B: {pb_ratio}, P/E: {pe_ratio}, Div Yield: {div_yield}")
-        
+        market_stats = blank_market_statistics()
+        can_calculate_market_stats = should_calculate_market_stats(
+            ticker,
+            profile,
+            yahoo_ticker,
+            reported_currency,
+            quote_currency,
+            adr_mapping
+        )
+
+        if can_calculate_market_stats and mapped_ticker and not yahoo_shares_outstanding:
+            can_calculate_market_stats = False
+
+        if can_calculate_market_stats and current_stock_price is not None:
+            # Market Statistics Calculations
+            book_value_per_share = shareholder_equity / market_shares_outstanding if market_shares_outstanding else 0
+            pb_ratio = current_stock_price / book_value_per_share if book_value_per_share else 0
+            operating_eps = net_profit / market_shares_outstanding if market_shares_outstanding else 0
+            pe_ratio = current_stock_price / operating_eps if operating_eps else 0
+            
+            statement_date = ic.get('date')
+            statement_year = int(statement_date.split('-')[0]) if statement_date else datetime.datetime.now().year
+            
+            yearly_high, yearly_low = get_yearly_high_low_yahoo(yahoo_ticker, statement_year)
+            average_price = (yearly_high + yearly_low) / 2 if (yearly_high is not None and yearly_low is not None) else current_stock_price
+            
+            dividends_paid = -1 * cf.get('dividendsPaid', 0)
+            dividends_per_share = dividends_paid / market_shares_outstanding if market_shares_outstanding else 0
+            div_yield = (dividends_per_share / average_price) if average_price else 0
+            
+            market_cap = current_stock_price * market_shares_outstanding
+            ev_sales = ((market_cap + lt_debt) / revenues) if revenues else 0
+            market_stats = {
+                "P/B": round(pb_ratio, 2),
+                "P/E": round(pe_ratio, 1),
+                "Div. Yld.": div_yield,
+                "EV/Sales": round(ev_sales, 2)
+            }
+        elif can_calculate_market_stats:
+            print(f"ERROR: Missing Yahoo price for {ticker} ({yahoo_ticker}); market statistics will be blank.")
+
+        logger.debug(f"Market metrics - {market_stats}")
+
         return {
             "operatingStatistics": {
                 ticker: {
@@ -161,12 +289,7 @@ def calculate_statistics(ticker, financial_data):
                 }
             },
             "marketStatistics": {
-                ticker: {
-                    "P/B": round(pb_ratio, 2),
-                    "P/E": round(pe_ratio, 1),
-                    "Div. Yld.": div_yield,
-                    "EV/Sales": round(ev_sales, 2)
-                }
+                ticker: market_stats
             }
         }
     except Exception as e:
@@ -261,7 +384,7 @@ def get_industry_peers_with_stats(ticker, num_comps=5, save_to_file=False):
     for t in all_tickers:
         logger.info(f"Processing ticker: {t}")
         financial_data = get_financial_data(t, api_key)
-        stats = calculate_statistics(t, financial_data)
+        stats = calculate_statistics(t, financial_data, adr_mapping)
         if stats:
             result["operatingStatistics"].update(stats["operatingStatistics"])
             result["marketStatistics"].update(stats["marketStatistics"])
