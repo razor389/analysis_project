@@ -4,7 +4,7 @@ echo Setting up the project environment...
 :: Check if Python is installed
 where python >nul 2>nul
 if errorlevel 1 (
-    echo Error: Python is not installed or not added to PATH. Please install Python 3.7 or newer and try again.
+    echo Error: Python is not installed or not added to PATH. Please install Python 3.10 or newer and try again.
     pause
     exit /b 1
 )

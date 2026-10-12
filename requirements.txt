@@ -6,7 +6,7 @@ requests
 openai
 pywin32
 anthropic
-google-generativeai
+google-genai<3
 urllib3
 beautifulsoup4
 lxml

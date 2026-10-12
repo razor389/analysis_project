@@ -13,7 +13,7 @@ This project provides a comprehensive suite of financial analysis tools for stoc
 
 ## Prerequisites
 
-- Python 3.7 or newer
+- Python 3.10 or newer
 - Microsoft Outlook (for email analysis features)
 - Windows OS (for setup.bat and Outlook integration)
 - Active API keys for:

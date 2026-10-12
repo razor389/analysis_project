@@ -6,18 +6,17 @@ import asyncio
 import re
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google.genai import types
 
 # Load environment variables
 load_dotenv()
 
-# Configure the Gemini API client
+# Read credentials; each async request creates and closes its own client.
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 if not gemini_api_key:
     raise ValueError("GEMINI_API_KEY not found in environment. Please set it in your .env file.")
-genai.configure(api_key=gemini_api_key)
 
 DEFAULT_MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
 DEFAULT_EMPHASIS_EMAIL = os.getenv("SUMMARY_EMPHASIS_EMAIL", "smgacm@gmail.com")
@@ -89,58 +88,53 @@ async def _call_gemini_async(
     response_mime_type: str = "text/plain",
     max_output_tokens: Optional[int] = None,
 ) -> str:
-    model = genai.GenerativeModel(
-        model_name=model_name,
+    generation_config = types.GenerateContentConfig(
         system_instruction=system_prompt,
-    )
-
-    from google.generativeai.types import GenerationConfig
-    
-    generation_config = GenerationConfig(
         response_mime_type=response_mime_type,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
+        # Preserve the existing thresholds for financial/political analysis.
+        safety_settings=[
+            types.SafetySetting(
+                category=category,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE,
+            )
+            for category in (
+                types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+            )
+        ],
     )
-
-    # BLOCK_NONE is essential for financial/political analysis to avoid false positives
-    safety_settings = {
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-    }
 
     print(f"[GEMINI] ==> Calling the API (Model: {model_name}, MaxTokens: {max_output_tokens})...")
     
     try:
-        response = await model.generate_content_async(
-            [user_prompt], 
-            generation_config=generation_config,
-            safety_settings=safety_settings
-        )
-        print("[GEMINI] ==> Response received.")
+        with genai.Client(api_key=gemini_api_key) as client:
+            async with client.aio as async_client:
+                response = await async_client.models.generate_content(
+                    model=model_name,
+                    contents=[user_prompt],
+                    config=generation_config,
+                )
     except Exception as e:
         print(f"[GEMINI] ==> API Call Failed: {e}")
         return ""
 
-    try:
-        # Check if the response was stopped due to max tokens (Reason 2)
-        if response.candidates and response.candidates[0].finish_reason == 2:
-            print("[GEMINI] ==> WARNING: Finish Reason 2 (MAX_TOKENS). The response might be incomplete.")
-            # If there is partial text, return it. If it was all "thinking", text might be empty.
-            if hasattr(response, 'text'):
-                return response.text.strip()
-            return ""
+    print("[GEMINI] ==> Response received.")
+    if response.candidates and response.candidates[0].finish_reason == types.FinishReason.MAX_TOKENS:
+        print("[GEMINI] ==> WARNING: MAX_TOKENS. The response might be incomplete.")
 
-        return response.text.strip()
-    except ValueError:
+    text = (response.text or "").strip()
+    if not text:
         print("[GEMINI] ==> ERROR: Response was empty or blocked.")
         if response.prompt_feedback:
             print(f"[GEMINI] ==> Prompt Feedback: {response.prompt_feedback}")
         if response.candidates:
             print(f"[GEMINI] ==> Finish Reason: {response.candidates[0].finish_reason}")
             print(f"[GEMINI] ==> Safety Ratings: {response.candidates[0].safety_ratings}")
-        return ""
+    return text
 
 def _extract_numbered_bullets(summary_text: str) -> str:
     """
